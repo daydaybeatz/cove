@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -7,6 +8,9 @@
   :root{
     --bg:#0f1220;--card:#171a2a;--text:#e7e9f4;--muted:#9aa0b5;--ok:#34d399;--err:#f87171;
     --accent:#6ee7ff;--accent2:#a78bfa;--border:#262b45;--hover:#2f365b;
+    /* darker preview defaults (will be overridden by JS to match theme) */
+    --preview-bg:#0c1120;
+    --preview-text:#9fb0d4;
   }
   *{box-sizing:border-box}
   html,body{height:100%}
@@ -21,10 +25,10 @@
     row-gap:12px;
   }
   #bg{position:fixed; inset:0; z-index:-2; background-position:center; background-size:cover; background-repeat:no-repeat; opacity:.25}
-  /* Duhg overlay � now always sized to viewport, blended, and high z-index */
+  /* Duhg overlay */
   #duhgCanvas{
     position:fixed; inset:0; z-index:5; pointer-events:none; opacity:.42;
-    mix-blend-mode:screen; will-change:transform; /* smoother on mobile */
+    mix-blend-mode:screen; will-change:transform;
   }
 
   .wrap{width:min(1100px,100%); margin-inline:auto}
@@ -101,14 +105,14 @@
   }
   .panel textarea{min-height:180px; resize:vertical}
 
-  .bubbles{display:flex; gap:10px; align-items:center; user-select:none}
+  .bubbles{display:flex; gap:12px; align-items:center; user-select:none; flex-wrap:wrap}
   .bubble{
-    width:32px; height:32px; border-radius:50%; border:2px solid rgba(255,255,255,.35);
-    cursor:grab; position:relative;
+    width:36px; height:36px; border-radius:50%; border:2px solid rgba(255,255,255,.35);
+    cursor:grab; position:relative; touch-action:manipulation;
   }
   .bubble small{
     position:absolute; bottom:-18px; left:50%; transform:translateX(-50%);
-    font-size:10px; color:var(--muted); white-space:nowrap;
+    font-size:10px; color:var(--muted); white-space:nowrap; pointer-events:none;
   }
 
   /* Grid */
@@ -131,12 +135,15 @@
   }
   .hint{font-size:12px; color:var(--muted)}
 
-  details.preview{background:#12162a; border:1px solid var(--border); border-radius:10px; padding:8px 10px}
+  details.preview{
+    background:var(--preview-bg);
+    border:1px solid var(--border); border-radius:10px; padding:8px 10px
+  }
   details.preview[open] summary{margin-bottom:6px}
   details.preview summary{cursor:pointer; list-style:none; font-size:12px; color:var(--muted)}
   details.preview summary::-webkit-details-marker{display:none}
   pre.snip{
-    margin:0; font-size:13px; color:#cfe3ff;
+    margin:0; font-size:13px; color:var(--preview-text);
     white-space:pre; overflow:auto; line-height:1.35;
     max-height:420px; min-height:300px;
   }
@@ -242,7 +249,7 @@
   <!-- Theme panel -->
   <div class="wrap">
     <div id="themePanel" class="panel" aria-label="Theme">
-      <div class="sub">Tap a bubble to pick a color. Drag bubbles to swap roles.</div>
+      <div class="sub">Tap a bubble to pick a color. Drag to swap (desktop) or tap one bubble and then another to swap (mobile).</div>
       <div class="bubbles" id="bubbleRow"></div>
       <div class="row">
         <button class="tbtn" id="saveThemeBtn">Save Theme</button>
@@ -355,6 +362,15 @@
   }
 
   /* Theme */
+  const hexToRgb = (hex)=>{ let h=hex.trim(); if(h.startsWith("#"))h=h.slice(1); if(h.length===3)h=h.split("").map(c=>c+c).join(""); const n=parseInt(h,16); return {r:(n>>16)&255,g:(n>>8)&255,b:n&255}; };
+  function mix(h1,h2,p){ // both hex strings
+    const a=hexToRgb(h1), b=hexToRgb(h2);
+    const r=Math.round(a.r+(b.r-a.r)*p), g=Math.round(a.g+(b.g-a.g)*p), bl=Math.round(a.b+(b.b-a.b)*p);
+    return "rgb("+r+","+g+","+bl+")";
+  }
+  const rgbaFromHex = (h,a)=>{ const {r,g,b}=hexToRgb(h); return "rgba("+r+","+g+","+b+","+a+")"; };
+  function toHex(c){ if(/^#/.test(c)) return c; const m=c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i); if(!m) return "#ffffff"; const h=n=>("0"+Number(n).toString(16)).slice(-2); return "#"+h(m[1])+h(m[2])+h(m[3]); }
+
   function loadTheme(){
     try{
       const j=JSON.parse(localStorage.getItem(THEME_KEY)||"{}");
@@ -362,17 +378,27 @@
       return {
         accent: j.accent || cs.getPropertyValue("--accent").trim() || "#6ee7ff",
         accent2:j.accent2|| cs.getPropertyValue("--accent2").trim()|| "#a78bfa",
+        text:   j.text   || cs.getPropertyValue("--text").trim()   || "#e7e9f4",
         bg:     j.bg     || cs.getPropertyValue("--bg").trim()     || "#0f1220",
-        card:   j.card   || cs.getPropertyValue("--card").trim()   || "#171a2a"
+        card:   j.card   || cs.getPropertyValue("--card").trim()   || "#171a2a",
+        border: j.border || cs.getPropertyValue("--border").trim() || "#262b45"
       };
-    }catch{ return {accent:"#6ee7ff", accent2:"#a78bfa", bg:"#0f1220", card:"#171a2a"}; }
+    }catch{ return {accent:"#6ee7ff", accent2:"#a78bfa", text:"#e7e9f4", bg:"#0f1220", card:"#171a2a", border:"#262b45"}; }
   }
   function saveTheme(t){ try{ localStorage.setItem(THEME_KEY, JSON.stringify(t)); }catch{} }
-  function applyTheme(t){ const r=document.documentElement.style; r.setProperty("--accent",t.accent); r.setProperty("--accent2",t.accent2); r.setProperty("--bg",t.bg); r.setProperty("--card",t.card); }
-
-  const hexToRgb = (hex)=>{ let h=hex.trim(); if(h.startsWith("#"))h=h.slice(1); if(h.length===3)h=h.split("").map(c=>c+c).join(""); const n=parseInt(h,16); return {r:(n>>16)&255,g:(n>>8)&255,b:n&255}; };
-  function mix(h1,h2,p){ const a=hexToRgb(h1), b=hexToRgb(h2); const r=Math.round(a.r+(b.r-a.r)*p), g=Math.round(a.g+(b.g-a.g)*p), bl=Math.round(a.b+(b.b-a.b)*p); return "rgb("+r+","+g+","+bl+")"; }
-  const rgbaFromHex = (h,a)=>{ const {r,g,b}=hexToRgb(h); return "rgba("+r+","+g+","+b+","+a+")"; };
+  function applyTheme(t){
+    const r=document.documentElement.style;
+    r.setProperty("--accent",t.accent);
+    r.setProperty("--accent2",t.accent2);
+    r.setProperty("--text",t.text);
+    r.setProperty("--bg",t.bg);
+    r.setProperty("--card",t.card);
+    r.setProperty("--border",t.border);
+    // derived hover + preview colors
+    r.setProperty("--hover", mix(toHex(t.border), toHex(t.accent), 0.35));
+    r.setProperty("--preview-bg", mix(toHex(t.card), "#000000", 0.35)); // darker than card
+    r.setProperty("--preview-text", mix(toHex(t.text), toHex(t.bg), 0.6)); // dimmed toward bg
+  }
 
   /* Background */
   function loadBg(){ try{ return localStorage.getItem(BGIMG_KEY) || ""; }catch{ return ""; } }
@@ -408,7 +434,7 @@
   }
   function normalizeOrders(){ booty.sort((a,b)=>(a.order-b.order)||((a.id||0)-(b.id||0))); booty.forEach((s,i)=> s.order=i+1); }
 
-  /* ===== Duhg mode (mobile-hardened) ===== */
+  /* ===== Duhg mode ===== */
   const duhg={
     on:false, raf:null, fps:isTouch?30:60, last:0, fontSize:16, cols:[], idx:0, source:"01",
     canvas:$("#duhgCanvas"), ctx:null,
@@ -419,13 +445,11 @@
       this.source = pool && pool.length>50 ? pool : "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ{}[]()<>+-=*/\\|;:,._";
     },
     setColorsFromTheme(){
-      /* derive softer colors from theme for readability */
-      this.charColor = mix(theme.accent, "#ffffff", 0.25);
-      this.headColor = mix(theme.accent2, "#ffffff", 0.35);
+      this.charColor = mix(toHex(theme.accent), "#ffffff", 0.25);
+      this.headColor = mix(toHex(theme.accent2), "#ffffff", 0.35);
       this.fadeColor = rgbaFromHex(theme.bg, 0.08);
     },
     sizeToViewport(){
-      /* CSS size = viewport; backing store = dpr*viewport; draw in CSS pixels */
       const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
       const vw = window.innerWidth, vh = window.innerHeight;
       this.canvas.style.width = vw + "px";
@@ -453,10 +477,7 @@
         if(t - this.last < minDelta){ this.raf = requestAnimationFrame(loop); return; }
         this.last = t;
         const ctx=this.ctx, w=window.innerWidth, h=window.innerHeight, fs=this.fontSize;
-        /* trail */
-        ctx.fillStyle=this.fadeColor;
-        ctx.fillRect(0,0,w,h);
-        /* columns */
+        ctx.fillStyle=this.fadeColor; ctx.fillRect(0,0,w,h);
         const src=this.source; const slen=src.length||1;
         for(let i=0;i<this.cols.length;i++){
           const x=i*fs, y=this.cols[i];
@@ -476,7 +497,6 @@
       if(this.ctx){ this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height); }
     }
   };
-  /* keep canvas sized on changes */
   const resizeDuhg = ()=>{ if(duhg.on){ duhg.sizeToViewport(); } };
   window.addEventListener("resize", resizeDuhg, {passive:true});
   window.addEventListener("orientationchange", ()=> setTimeout(resizeDuhg, 250), {passive:true});
@@ -485,16 +505,75 @@
   /* Theme init + bubbles */
   let theme = loadTheme();
   applyTheme(theme);
-  function toHex(c){ if(/^#/.test(c)) return c; const m=c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i); if(!m) return "#ffffff"; const h=n=>("0"+Number(n).toString(16)).slice(-2); return "#"+h(m[1])+h(m[2])+h(m[3]); }
+
+  // Mobile-friendly swapping: tap one bubble, then another to swap roles
+  let pendingSwapRole = null;
+
   function renderBubbles(){
     const row=$("#bubbleRow"); row.innerHTML="";
-    [{role:"accent",label:"accent 1"},{role:"accent2",label:"accent 2"},{role:"bg",label:"background"},{role:"card",label:"card"}].forEach(({role,label})=>{
-      const b=document.createElement("div"); b.className="bubble"; b.draggable=true; b.dataset.role=role; b.style.background=theme[role];
+    const roles = [
+      {role:"accent", label:"accent 1"},
+      {role:"accent2",label:"accent 2"},
+      {role:"text",   label:"text"},
+      {role:"bg",     label:"background"},
+      {role:"card",   label:"card"},
+      {role:"border", label:"border"}
+    ];
+    roles.forEach(({role,label})=>{
+      const b=document.createElement("div"); b.className="bubble"; b.draggable=!isTouch; b.dataset.role=role; b.style.background=theme[role];
       const cap=document.createElement("small"); cap.textContent=label; b.appendChild(cap);
-      b.onclick=()=>{ const inp=document.createElement("input"); inp.type="color"; inp.value=toHex(theme[role]); inp.style.position="fixed"; inp.style.left="-9999px"; document.body.appendChild(inp); inp.oninput=()=>{ theme[role]=inp.value; b.style.background=inp.value; applyTheme(theme); duhg.setColorsFromTheme(); if(duhg.on) duhg.sizeToViewport(); }; inp.onchange=()=>document.body.removeChild(inp); inp.click(); };
-      b.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/role",role); });
-      b.addEventListener("dragover",e=>e.preventDefault());
-      b.addEventListener("drop",e=>{ e.preventDefault(); const from=e.dataTransfer.getData("text/role"); const to=role; if(!from||from===to) return; const tmp=theme[from]; theme[from]=theme[to]; theme[to]=tmp; applyTheme(theme); duhg.setColorsFromTheme(); renderBubbles(); if(duhg.on) duhg.sizeToViewport(); });
+
+      // Color picker (works on desktop + mobile)
+      const openPicker = () => {
+        const inp=document.createElement("input");
+        inp.type="color";
+        inp.value=toHex(theme[role]);
+        inp.style.position="fixed"; inp.style.left="-9999px";
+        document.body.appendChild(inp);
+        inp.oninput=()=>{ theme[role]=inp.value; b.style.background=inp.value; applyTheme(theme); duhg.setColorsFromTheme(); if(duhg.on) duhg.sizeToViewport(); };
+        inp.onchange=()=>document.body.removeChild(inp);
+        inp.click();
+      };
+      b.addEventListener("click",(e)=>{
+        // if we already have a pending swap, do swap on click instead of picker
+        if(isTouch && pendingSwapRole && pendingSwapRole!==role){
+          const from=pendingSwapRole, to=role; pendingSwapRole=null;
+          const tmp=theme[from]; theme[from]=theme[to]; theme[to]=tmp;
+          applyTheme(theme); duhg.setColorsFromTheme(); renderBubbles(); if(duhg.on) duhg.sizeToViewport();
+          toast("Swapped "+from+" with "+to);
+        } else {
+          openPicker();
+        }
+      });
+
+      // Touch swap: first tap selects source, second tap on a different bubble swaps
+      b.addEventListener("touchstart",(e)=>{
+        if(!isTouch) return;
+        if(pendingSwapRole===role){ pendingSwapRole=null; toast("Swap canceled"); return; }
+        if(pendingSwapRole && pendingSwapRole!==role){
+          const from=pendingSwapRole, to=role; pendingSwapRole=null;
+          const tmp=theme[from]; theme[from]=theme[to]; theme[to]=tmp;
+          applyTheme(theme); duhg.setColorsFromTheme(); renderBubbles(); if(duhg.on) duhg.sizeToViewport();
+          toast("Swapped "+from+" with "+to);
+        } else {
+          pendingSwapRole=role;
+          toast("Tap another bubble to swap with "+role);
+        }
+        e.preventDefault();
+      }, {passive:false});
+
+      // Desktop drag-and-drop swap
+      b.addEventListener("dragstart",e=>{ if(isTouch) return; e.dataTransfer.setData("text/role",role); });
+      b.addEventListener("dragover",e=>{ if(isTouch) return; e.preventDefault(); });
+      b.addEventListener("drop",e=>{
+        if(isTouch) return;
+        e.preventDefault();
+        const from=e.dataTransfer.getData("text/role"); const to=role;
+        if(!from||from===to) return;
+        const tmp=theme[from]; theme[from]=theme[to]; theme[to]=tmp;
+        applyTheme(theme); duhg.setColorsFromTheme(); renderBubbles(); if(duhg.on) duhg.sizeToViewport();
+      });
+
       row.appendChild(b);
     });
   }
@@ -557,6 +636,29 @@
     mk("Next",()=>{currentPage=Math.min(pages,currentPage+1); renderGrid();}, currentPage===pages);
     mk("Last", ()=>{currentPage=pages; renderGrid();}, currentPage===pages);
   }
+
+  // simple history helper for contenteditable code blocks
+  function makeHistory(el, initialText){
+    const hist = { stack:[initialText], idx:0, timer:null, limit:100 };
+    const set = (txt) => { el.innerText = txt; };
+    const current = () => hist.stack[hist.idx];
+    const push = (txt) => {
+      if (txt === current()) return;
+      hist.stack = hist.stack.slice(0, hist.idx+1);
+      hist.stack.push(txt);
+      if(hist.stack.length>hist.limit){ hist.stack.shift(); } else { hist.idx++; }
+    };
+    const debouncedPush = () => {
+      clearTimeout(hist.timer);
+      hist.timer = setTimeout(()=> push(el.innerText), 300);
+    };
+    const undo = () => { if(hist.idx>0){ hist.idx--; set(current()); } };
+    const redo = () => { if(hist.idx<hist.stack.length-1){ hist.idx++; set(current()); } };
+    const canUndo = () => hist.idx>0;
+    const canRedo = () => hist.idx<hist.stack.length-1;
+    return { push, debouncedPush, undo, redo, canUndo, canRedo };
+  }
+
   function makeCard(item){
     const card=document.createElement("div"); card.className="card";
     const title=document.createElement("div"); title.className="ctitle";
@@ -567,7 +669,7 @@
     input.addEventListener("change",()=>{ const v=Math.max(1,Math.floor(Number(input.value)||item.order)); normalizeOrders(); const from=booty.findIndex(s=>s.id===item.id); const to=Math.min(booty.length,v)-1; const [sp]=booty.splice(from,1); booty.splice(to,0,sp); normalizeOrders(); saveBooty(currentCove,booty); renderAll(); duhg.setSourceFromBooty(); });
     ordbox.append(lab,input); title.append(name,ordbox);
 
-    const hint=document.createElement("div"); hint.className="hint"; hint.textContent="Tap preview to edit. After changes, tap Save.";
+    const hint=document.createElement("div"); hint.className="hint"; hint.textContent="Tap preview to edit. Use Undo/Redo, then Save.";
     const details=document.createElement("details"); details.className="preview"; details.open=true;
     const sum=document.createElement("summary"); sum.textContent="Preview";
     const pre=document.createElement("pre"); pre.className="snip"; pre.contentEditable="true"; pre.spellcheck=false; pre.textContent=item.code||"";
@@ -576,10 +678,27 @@
     const status=document.createElement("div"); status.className="status"; status.textContent=" ";
     const btnCopy=document.createElement("button"); btnCopy.className="copy"; btnCopy.textContent="Copy to clipboard";
     btnCopy.onclick=async()=>{ const ok=await copyText(pre.innerText); status.className="status "+(ok?"ok":"err"); status.textContent=ok?"Copied":"Copy failed"; toast(ok?"Copied":"Copy failed"); };
+
     const saveBtn=document.createElement("button"); saveBtn.className="small"; saveBtn.textContent="Save changes"; saveBtn.style.display="none";
+    const undoBtn=document.createElement("button"); undoBtn.className="small"; undoBtn.textContent="Undo";
+    const redoBtn=document.createElement("button"); redoBtn.className="small"; redoBtn.textContent="Redo";
+
+    const hist = makeHistory(pre, pre.innerText);
+    function refreshUndoRedo(){
+      undoBtn.disabled = !hist.canUndo();
+      redoBtn.disabled = !hist.canRedo();
+    }
+    refreshUndoRedo();
+
     function markDirty(){ saveBtn.style.display = pre.innerText !== (item.code||"") ? "inline-flex":"none"; }
-    pre.addEventListener("input", markDirty);
+
+    pre.addEventListener("input", ()=>{ hist.debouncedPush(); markDirty(); refreshUndoRedo(); });
+
+    undoBtn.onclick=()=>{ hist.undo(); markDirty(); refreshUndoRedo(); };
+    redoBtn.onclick=()=>{ hist.redo(); markDirty(); refreshUndoRedo(); };
+
     saveBtn.onclick=()=>{ item.code=pre.innerText; const idx=booty.findIndex(s=>s.id===item.id); if(idx>=0){ booty[idx]=item; saveBooty(currentCove,booty); toast("Saved"); duhg.setSourceFromBooty(); } markDirty(); };
+
     const delBtn=document.createElement("button"); delBtn.className="small"; delBtn.textContent="Delete";
     const confirmWrap=document.createElement("span"); confirmWrap.style.display="none"; confirmWrap.className="row";
     const ynTxt=document.createElement("span"); ynTxt.textContent="Are you sure";
@@ -591,10 +710,11 @@
     no.onclick=()=>{ confirmWrap.style.display="none"; };
 
     const actions=document.createElement("div"); actions.className="actions";
-    actions.append(btnCopy, saveBtn, delBtn, confirmWrap);
+    actions.append(btnCopy, undoBtn, redoBtn, saveBtn, delBtn, confirmWrap);
     card.append(title,hint,details,actions,status);
     return card;
   }
+
   function renderGrid(){
     $("#grid").innerHTML="";
     booty.sort((a,b)=>a.order-b.order);
@@ -668,7 +788,7 @@
     toast("Backup downloaded");
   };
 
-  /* Duhg toggle init � now reliable across reloads and mobile */
+  /* Duhg toggle */
   const duhgBtn=$("#duhgToggle");
   function setDuhgButton(on){ duhgBtn.textContent = "Duhg Mode: " + (on?"On":"Off"); }
   const duhgSaved = localStorage.getItem(DUHG_KEY) === "1";
