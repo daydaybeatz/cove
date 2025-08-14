@@ -2,7 +2,6 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-<title>coves</title>
 <style>
   :root{
     --bg:#0f1220;--card:#171a2a;--text:#e7e9f4;--muted:#9aa0b5;--ok:#34d399;--err:#f87171;
