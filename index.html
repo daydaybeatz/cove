@@ -93,6 +93,28 @@
       align-items: end;
       gap: 10px;
     }
+    .hotbar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
+      margin: 4px 0;
+    }
+    .hotkey-slot {
+      border: 1px solid #2a3552;
+      border-radius: 8px;
+      background: #0d1322;
+      color: #b9c7ec;
+      font-size: 12px;
+      padding: 6px;
+      min-height: 56px;
+      display: grid;
+      gap: 2px;
+      align-content: center;
+      text-align: center;
+    }
+    .hotkey-slot.ready { border-color: #70d890; color: #c8ffd7; }
+    .hotkey-slot.cooling { border-color: #7d83b7; color: #9fa8d8; }
+    .hotkey-slot.empty { opacity: 0.7; }
     .stick {
       width: min(42vw, 180px);
       aspect-ratio: 1;
@@ -167,10 +189,12 @@
       <div id="entityLayer"></div>
     </div>
 
+    <div id="hotbar" class="hotbar"></div>
+
     <div class="controls">
       <div id="moveStick" class="stick"><div class="knob"></div></div>
       <div class="buttons">
-        <button id="abilityBtn">PANIC</button>
+        <button id="abilityBtn">RELIC BURST</button>
         <div class="opts">
           <label><input id="autoAim" type="checkbox" checked /> Auto-aim</label>
           <label><input id="autoFire" type="checkbox" checked /> Auto-fire</label>
@@ -212,7 +236,7 @@
         stakesLevel: 1,
         batsLevel: 0,
       },
-      enemies: [], bullets: [], gems: [], pickups: [], fx: [],
+      enemies: [], bullets: [], gems: [], pickups: [], fx: [], clones: [],
       activeWeapon: 'rifle',
       configs: { upgrades: [], enemyTypes: [], waves: [], levels: [] },
       levelDef: null,
@@ -228,11 +252,17 @@
       levelStartTime: 0,
       levelIndex: 0,
       shapeName: '',
-      movement: { vx: 0, vy: 0 }
+      movement: { vx: 0, vy: 0 },
+      abilitySlots: [],
+      abilityOrder: ['teleportStep', 'sentinelClone', 'graveWall'],
+      phaseWalkUntil: 0,
+      entityScale: 1,
+      upgradeLevels: {}
     };
 
     const screen = document.getElementById('screen');
     const entityLayer = document.getElementById('entityLayer');
+    const hotbar = document.getElementById('hotbar');
     const hpFill = document.getElementById('hpFill');
     const xpFill = document.getElementById('xpFill');
     const stats = document.getElementById('stats');
@@ -243,11 +273,11 @@
 
     const UPGRADE_COLORS = {
       weapon: '#ff8fab',
-      cyber: '#6ae3ff',
-      arcane: '#b388ff',
-      skyrim: '#9fe870',
-      rogue: '#ffd166',
-      survival: '#8bd3ff'
+      gothic: '#d787ff',
+      alchemy: '#7af1a4',
+      wasteland: '#ffd166',
+      relic: '#8bd3ff',
+      ritual: '#ff9a76'
     };
 
 
@@ -257,6 +287,36 @@
       { id: 'laser', name: 'Laser', glyph: 'L', color: '#ff7aff', cooldownMult: 2.1, damageMult: 3.8, speed: 14.5, life: 1.1, pierce: 999, spread: 0, projectiles: 1, ricochet: false },
       { id: 'shotgun', name: 'Shotgun', glyph: 'S', color: '#ffb347', cooldownMult: 1.45, damageMult: 0.8, speed: 10.4, life: 0.55, pierce: 0, spread: 0.24, projectiles: 4, ricochet: false }
     ];
+
+    const ABILITY_META = {
+      teleportStep: {
+        id: 'teleportStep',
+        key: '1',
+        name: 'Mist Step',
+        desc: 'Teleport in the direction you are moving.',
+        baseCooldown: 9500,
+        maxLevel: 5,
+        baseCharges: 1
+      },
+      sentinelClone: {
+        id: 'sentinelClone',
+        key: '2',
+        name: 'Pale Doppel',
+        desc: 'Place a static clone that shoots nearby enemies.',
+        baseCooldown: 13000,
+        maxLevel: 5,
+        baseCharges: 1
+      },
+      graveWall: {
+        id: 'graveWall',
+        key: '3',
+        name: 'Bone Rampart',
+        desc: 'Build a wall trail where you walk for 5s.',
+        baseCooldown: 15000,
+        maxLevel: 5,
+        baseCharges: 1
+      }
+    };
 
     function escapeHtml(ch){
       if(ch === '&') return '&amp;';
@@ -273,9 +333,9 @@
     function upgradeColor(up){
       if(up.theme && UPGRADE_COLORS[up.theme]) return UPGRADE_COLORS[up.theme];
       if(['whip','stakes','bats'].includes(up.id)) return UPGRADE_COLORS.weapon;
-      if(['garlic'].includes(up.id)) return UPGRADE_COLORS.skyrim;
-      if(['damage','fireRate'].includes(up.id)) return UPGRADE_COLORS.rogue;
-      return UPGRADE_COLORS.survival;
+      if(['garlic'].includes(up.id)) return UPGRADE_COLORS.alchemy;
+      if(['damage','fireRate'].includes(up.id)) return UPGRADE_COLORS.wasteland;
+      return UPGRADE_COLORS.relic;
     }
     function rand(a,b){ return Math.random()*(b-a)+a; }
     function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
@@ -295,8 +355,30 @@
       rebuildLevelGeometry();
       bindStick('moveStick', 'move');
       bindStick('aimStick', 'aim');
+      initAbilitySlots();
+      bindHotkeys();
       document.getElementById('abilityBtn').addEventListener('click', panicBomb);
       setInterval(loop, TICK);
+    }
+
+    function initAbilitySlots(){
+      state.abilitySlots = state.abilityOrder.map(id => ({
+        id,
+        level: 0,
+        charges: 0,
+        maxCharges: ABILITY_META[id].baseCharges,
+        cooldownMs: ABILITY_META[id].baseCooldown,
+        nextReadyAt: 0
+      }));
+    }
+
+    function bindHotkeys(){
+      window.addEventListener('keydown', (e) => {
+        const index = Number(e.key) - 1;
+        if(index >= 0 && index < state.abilitySlots.length){
+          activateAbilitySlot(index);
+        }
+      });
     }
 
     function resetPlayer(){ state.player.x = GRID_W/2; state.player.y = GRID_H/2; }
@@ -506,8 +588,25 @@
         touchDamage:t.touchDamage,
         xp:t.xp,
         boss: !!t.boss,
-        hitFlash:0
+        hitFlash:0,
+        size: t.size || 1,
+        canBreakWalls: t.canBreakWalls !== false,
+        wallDamage: t.wallDamage || 0.6,
+        dashWindup: 0,
+        dashCooldown: 0,
+        dashDirX: 0,
+        dashDirY: 0,
+        dashing: 0,
+        wallHitTicks: 0
       });
+    }
+
+    function breakWallTowardEntity(entity, tx, ty, dt){
+      const nx = normalize(tx - entity.x, ty - entity.y);
+      const wx = entity.x + nx.x * 0.8;
+      const wy = entity.y + nx.y * 0.8;
+      const damage = Math.max(0.1, entity.wallDamage * dt * 10);
+      return damageWallAt(wx, wy, damage);
     }
 
     function spawnParticles(kind, x, y, amount){
@@ -619,6 +718,23 @@
       }
     }
 
+    function cloneLogic(dt){
+      for(let i=state.clones.length-1;i>=0;i--){
+        const c = state.clones[i];
+        c.ttl -= dt;
+        if(c.ttl <= 0){ state.clones.splice(i,1); continue; }
+        let target = null;
+        for(const e of state.enemies){
+          if(dist(c, e) <= c.range && (!target || dist(c, e) < dist(c, target))) target = e;
+        }
+        if(target){
+          target.hp -= c.dps * dt;
+          target.hitFlash = 0.06;
+          if(Math.random() < dt * 12) state.fx.push({ x: c.x, y: c.y, vx: (target.x-c.x)*2, vy: (target.y-c.y)*2, life: 0.1, char: '•', color: '#c9d4ff' });
+        }
+      }
+    }
+
     function panicBomb(){
       for(const e of state.enemies){
         const d = dist(state.player,e);
@@ -639,15 +755,49 @@
       const p = state.player;
       for(const e of state.enemies){
         const n = normalize(p.x - e.x, p.y - e.y);
-        const speed = e.speed * dt;
-        const nextX = clamp(e.x + n.x * speed, 0, GRID_W - 0.001);
-        const nextY = clamp(e.y + n.y * speed, 0, GRID_H - 0.001);
+        let moveX = n.x;
+        let moveY = n.y;
+        let speed = e.speed * dt;
+
+        if(e.type === 'juggernaut'){
+          e.dashCooldown = Math.max(0, e.dashCooldown - dt);
+          e.dashing = Math.max(0, e.dashing - dt);
+          if(e.dashing > 0){
+            moveX = e.dashDirX;
+            moveY = e.dashDirY;
+            speed = e.speed * 5.8 * dt;
+          } else if(e.dashWindup > 0){
+            e.dashWindup -= dt;
+            moveX = 0;
+            moveY = 0;
+            speed = 0;
+            if(e.dashWindup <= 0){
+              e.dashing = 0.34;
+              e.dashCooldown = 2.2;
+            }
+          } else if(e.dashCooldown <= 0){
+            const dir = normalize((p.x + rand(-1, 1)) - e.x, (p.y + rand(-1, 1)) - e.y);
+            e.dashDirX = dir.x;
+            e.dashDirY = dir.y;
+            e.dashWindup = 0.75;
+          }
+        }
+
+        const nextX = clamp(e.x + moveX * speed, 0, GRID_W - 0.001);
+        const nextY = clamp(e.y + moveY * speed, 0, GRID_H - 0.001);
         const steer = Math.sin((state.timeSec * 6) + e.x * 1.7 + e.y * 2.3) * speed * 0.45;
-        if(!circleBlocked(nextX, e.y)) e.x = nextX;
-        else if(!circleBlocked(e.x, e.y + steer)) e.y = clamp(e.y + steer, 0, GRID_H - 0.001);
-        if(!circleBlocked(e.x, nextY)) e.y = nextY;
-        else if(!circleBlocked(e.x + steer, e.y)) e.x = clamp(e.x + steer, 0, GRID_W - 0.001);
-        if(dist(e,p) < 0.8){ p.hp -= e.touchDamage*dt; }
+        const blockX = circleBlocked(nextX, e.y, 0.3 * (e.size || 1));
+        const blockY = circleBlocked(e.x, nextY, 0.3 * (e.size || 1));
+
+        if(!blockX) e.x = nextX;
+        else if(!circleBlocked(e.x, e.y + steer, 0.3 * (e.size || 1))) e.y = clamp(e.y + steer, 0, GRID_H - 0.001);
+        else if(e.canBreakWalls) e.wallHitTicks += breakWallTowardEntity(e, p.x, p.y, dt) ? 1 : 0;
+
+        if(!blockY) e.y = nextY;
+        else if(!circleBlocked(e.x + steer, e.y, 0.3 * (e.size || 1))) e.x = clamp(e.x + steer, 0, GRID_W - 0.001);
+        else if(e.canBreakWalls) e.wallHitTicks += breakWallTowardEntity(e, p.x, p.y, dt) ? 1 : 0;
+
+        if(dist(e,p) < 0.65 + (e.size - 1) * 0.45){ p.hp -= e.touchDamage*dt; }
         e.hitFlash = Math.max(0, e.hitFlash - dt);
       }
       for(let i=state.enemies.length-1;i>=0;i--){
@@ -727,8 +877,14 @@
     function levelUp(){
       state.paused = true;
       overlay.style.display = 'grid';
-      const picks = [...state.configs.upgrades].sort(()=>Math.random()-0.5).slice(0,3);
+      const available = state.configs.upgrades.filter(canTakeUpgrade);
+      const picks = [...available].sort(()=>Math.random()-0.5).slice(0,3);
       choices.innerHTML = '';
+      if(!picks.length){
+        overlay.style.display='none';
+        state.paused = false;
+        return;
+      }
       for(const up of picks){
         const btn = document.createElement('button');
         btn.className = 'choice';
@@ -740,8 +896,44 @@
       }
     }
 
+    function canTakeUpgrade(up){
+      const p = state.player;
+      const level = state.upgradeLevels[up.id] || 0;
+      if(level >= (up.maxLevel || 99)) return false;
+      if(up.id in ABILITY_META){
+        const slot = state.abilitySlots.find(s => s.id === up.id);
+        return !!slot;
+      }
+      if(up.id === 'extraAbilityUse') return state.abilitySlots.some(s => s.level > 0 && s.maxCharges < 2);
+      const map = { whip: 'whipLevel', garlic: 'garlicLevel', stakes: 'stakesLevel', bats: 'batsLevel' };
+      const k = map[up.id];
+      if(k) return true;
+      return true;
+    }
+
     function applyUpgrade(up){
       const p = state.player;
+      state.upgradeLevels[up.id] = (state.upgradeLevels[up.id] || 0) + 1;
+      if(up.id in ABILITY_META){
+        const slot = state.abilitySlots.find(s => s.id === up.id);
+        if(slot){
+          slot.level++;
+          slot.maxCharges = ABILITY_META[up.id].baseCharges + Math.floor(slot.level >= 3 ? 1 : 0);
+          slot.charges = Math.max(slot.charges, slot.maxCharges);
+          slot.cooldownMs = Math.max(2400, ABILITY_META[up.id].baseCooldown - slot.level * 700);
+        }
+      }
+      if(up.id === 'extraAbilityUse'){
+        for(const slot of state.abilitySlots){
+          if(slot.level > 0 && slot.maxCharges < 2){
+            slot.maxCharges = 2;
+            slot.charges = Math.max(slot.charges, slot.maxCharges);
+          }
+        }
+      }
+      if(up.id === 'phaseStride'){
+        state.phaseWalkUntil = Math.max(state.phaseWalkUntil, state.timeSec + 10);
+      }
       if(up.id === 'whip') p.whipLevel++;
       if(up.id === 'garlic') p.garlicLevel++;
       if(up.id === 'stakes') p.stakesLevel++;
@@ -753,6 +945,48 @@
       if(fx.pickupRadius) p.pickupRadius += fx.pickupRadius;
       if(fx.maxHp){ p.maxHp += fx.maxHp; p.hp += (fx.heal || 0); }
       p.hp = clamp(p.hp,0,p.maxHp);
+    }
+
+    function activateAbilitySlot(index){
+      const slot = state.abilitySlots[index];
+      if(!slot || slot.level <= 0 || slot.charges <= 0) return;
+      const now = performance.now();
+      if(now < slot.nextReadyAt) return;
+      const used = useAbility(slot);
+      if(!used) return;
+      slot.charges--;
+      slot.nextReadyAt = now + slot.cooldownMs;
+    }
+
+    function useAbility(slot){
+      const p = state.player;
+      const moveVec = normalize(state.movement.vx || p.aimX, state.movement.vy || p.aimY);
+      if(slot.id === 'teleportStep'){
+        const range = 2.7 + slot.level * 0.9;
+        for(let step=1; step<=10; step++){
+          const tx = clamp(p.x + moveVec.x * range * (step / 10), 0, GRID_W - 0.001);
+          const ty = clamp(p.y + moveVec.y * range * (step / 10), 0, GRID_H - 0.001);
+          if(!circleBlocked(tx, ty, 0.28)){ p.x = tx; p.y = ty; }
+        }
+        spawnParticles('blast', p.x, p.y, 14 + slot.level * 2);
+        return true;
+      }
+      if(slot.id === 'sentinelClone'){
+        state.clones.push({
+          x: p.x,
+          y: p.y,
+          ttl: 5 + slot.level * 1.5,
+          dps: 8 + slot.level * 4,
+          range: 4 + slot.level * 0.6
+        });
+        return true;
+      }
+      if(slot.id === 'graveWall'){
+        p.wallTrailUntil = state.timeSec + 5;
+        p.wallTrailPower = 6 + slot.level * 1.2;
+        return true;
+      }
+      return false;
     }
 
 
@@ -772,7 +1006,8 @@
       const now = performance.now();
       const w = currentWave();
       if(now >= state.nextSpawnAt){
-        spawnEnemy(pickWeighted(w.mix));
+        const roll = Math.random() < 0.025;
+        spawnEnemy(roll ? 'juggernaut' : pickWeighted(w.mix));
         state.nextSpawnAt = now + w.spawnEveryMs;
       }
       if(state.timeSec >= state.nextBossAt){
@@ -806,8 +1041,18 @@
       }
       const nextX = clamp(p.x + state.movement.vx * dt, 0, GRID_W - 0.001);
       const nextY = clamp(p.y + state.movement.vy * dt, 0, GRID_H - 0.001);
-      if(!circleBlocked(nextX, p.y, 0.32)) p.x = nextX;
-      if(!circleBlocked(p.x, nextY, 0.32)) p.y = nextY;
+      const phasing = state.timeSec < state.phaseWalkUntil;
+      if(phasing) damageWallAt(nextX, p.y, dt * 18);
+      if(phasing || !circleBlocked(nextX, p.y, 0.32)) p.x = nextX;
+      if(phasing) damageWallAt(p.x, nextY, dt * 18);
+      if(phasing || !circleBlocked(p.x, nextY, 0.32)) p.y = nextY;
+
+      if((p.wallTrailUntil || 0) > state.timeSec){
+        const gx = Math.floor(p.x), gy = Math.floor(p.y);
+        if(gx > 1 && gy > 1 && gx < GRID_W - 1 && gy < GRID_H - 1){
+          state.walls[gy][gx] = Math.max(state.walls[gy][gx] || 0, p.wallTrailPower || 6);
+        }
+      }
 
       const aim = state.joysticks.aim;
       if(aim.active && Math.hypot(aim.x, aim.y) > 0.2){
@@ -817,6 +1062,13 @@
         p.aimX += (nearest.x - p.x - p.aimX) * Math.min(1, dt * 10); p.aimY += (nearest.y - p.y - p.aimY) * Math.min(1, dt * 10);
       }
       fire();
+
+      for(const slot of state.abilitySlots){
+        if(slot.level > 0 && slot.charges < slot.maxCharges && performance.now() >= slot.nextReadyAt){
+          slot.charges++;
+          if(slot.charges < slot.maxCharges) slot.nextReadyAt = performance.now() + slot.cooldownMs;
+        }
+      }
     }
 
     function render(){
@@ -854,14 +1106,30 @@
       screen.innerHTML = lines.join('\n');
 
       const entities = [];
-      const pushEntity = (x, y, char, color) => {
-        entities.push(`<span class="entity" style="left:${(x / GRID_W) * 100}%;top:${(y / GRID_H) * 100}%;color:${color}">${escapeHtml(char)}</span>`);
+      const pushEntity = (x, y, char, color, scale = 1, opacity = 1) => {
+        entities.push(`<span class="entity" style="left:${(x / GRID_W) * 100}%;top:${(y / GRID_H) * 100}%;color:${color};transform:translate(-50%, -50%) scale(${scale});opacity:${opacity}">${escapeHtml(char)}</span>`);
       };
       for(const b of state.bullets) pushEntity(b.x, b.y, b.char, 'var(--bullet)');
-      for(const e of state.enemies) pushEntity(e.x, e.y, e.char, e.hitFlash > 0 ? '#ffffff' : (e.color || 'var(--enemy)'));
+      for(const e of state.enemies){
+        const shake = e.type === 'juggernaut' && e.dashWindup > 0 ? (Math.sin(state.timeSec * 65) * 0.15) : 0;
+        pushEntity(e.x + shake, e.y, e.char, e.hitFlash > 0 ? '#ffffff' : (e.color || 'var(--enemy)'), e.size || 1);
+        if(e.type === 'juggernaut' && e.dashWindup > 0){
+          const ax = e.x + e.dashDirX * 1.6;
+          const ay = e.y + e.dashDirY * 1.6;
+          pushEntity(ax, ay, '➤', '#ffffff', 1.2, 0.95);
+        }
+      }
+      for(const c of state.clones) pushEntity(c.x, c.y, '&', '#c1ccff', 1.15, 0.9);
       for(const f of state.fx) pushEntity(f.x, f.y, f.char, f.color);
       pushEntity(p.x, p.y, '@', 'var(--player)');
       entityLayer.innerHTML = entities.join('');
+
+      hotbar.innerHTML = state.abilitySlots.map(slot => {
+        if(slot.level <= 0) return `<div class="hotkey-slot empty">${ABILITY_META[slot.id].key}<br>${ABILITY_META[slot.id].name}<br>Locked</div>`;
+        const ready = performance.now() >= slot.nextReadyAt;
+        const remains = ready ? 'Ready' : `${((slot.nextReadyAt - performance.now()) / 1000).toFixed(1)}s`;
+        return `<div class="hotkey-slot ${ready ? 'ready' : 'cooling'}">${ABILITY_META[slot.id].key} · ${ABILITY_META[slot.id].name}<br>Lv ${slot.level} · ${slot.charges}/${slot.maxCharges}<br>${remains}</div>`;
+      }).join('');
 
       hpFill.style.width = `${(p.hp/p.maxHp)*100}%`;
       xpFill.style.width = `${(state.xp/state.xpToLevel)*100}%`;
@@ -883,6 +1151,7 @@
       whipTick(dt);
       garlicTick(dt);
       batsTick(dt);
+      cloneLogic(dt);
       bulletLogic(dt);
       enemyLogic(dt);
       fxLogic(dt);
