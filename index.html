@@ -55,6 +55,10 @@
     .fill { height: 100%; }
     .hp-fill { background: var(--hp); }
     .xp-fill { background: var(--xp); }
+    .screen-wrap {
+      position: relative;
+      min-height: 56vh;
+    }
     #screen {
       margin: 0;
       background: #080b12;
@@ -68,6 +72,20 @@
       overflow: hidden;
       color: #dbe8ff;
       min-height: 56vh;
+    }
+    #entityLayer {
+      position: absolute;
+      inset: 0;
+      padding: 8px;
+      pointer-events: none;
+      overflow: hidden;
+      font-size: clamp(14px, 2.6vw, 20px);
+      line-height: 1;
+      letter-spacing: 0.02em;
+    }
+    .entity {
+      position: absolute;
+      transform: translate(-50%, -50%);
     }
     .controls {
       display: grid;
@@ -144,7 +162,10 @@
       <div id="stats">Lv 1 · 00:00 · KOs 0</div>
     </div>
 
-    <pre id="screen"></pre>
+    <div class="screen-wrap">
+      <pre id="screen"></pre>
+      <div id="entityLayer"></div>
+    </div>
 
     <div class="controls">
       <div id="moveStick" class="stick"><div class="knob"></div></div>
@@ -211,6 +232,7 @@
     };
 
     const screen = document.getElementById('screen');
+    const entityLayer = document.getElementById('entityLayer');
     const hpFill = document.getElementById('hpFill');
     const xpFill = document.getElementById('xpFill');
     const stats = document.getElementById('stats');
@@ -805,11 +827,7 @@
         const weapon = getWeaponDrop(pickup.weaponId);
         setCell(glyphs, pickup.x|0, pickup.y|0, weapon.glyph, 'var(--pickup)');
       }
-      for(const b of state.bullets){ setCell(glyphs, b.x|0, b.y|0, b.char, 'var(--bullet)'); }
-      for(const e of state.enemies){ setCell(glyphs, e.x|0, e.y|0, e.char, e.hitFlash > 0 ? '#ffffff' : (e.color || 'var(--enemy)')); }
-      for(const f of state.fx){ setCell(glyphs, f.x|0, f.y|0, f.char, f.color); }
       const p = state.player;
-      setCell(glyphs, p.x|0, p.y|0, '@', 'var(--player)');
 
       if(p.garlicLevel>0){
         const r = 1.2 + p.garlicLevel*0.45;
@@ -824,7 +842,9 @@
         for(let i=0;i<count;i++){
           const a = state.timeSec*2.2 + (Math.PI*2/count)*i;
           const r = 1.8 + p.batsLevel*0.25;
-          setCell(glyphs, (p.x + Math.cos(a)*r)|0, (p.y + Math.sin(a)*r)|0, 'o', 'var(--bat)');
+          const bx = p.x + Math.cos(a) * r;
+          const by = p.y + Math.sin(a) * r;
+          setCell(glyphs, bx|0, by|0, 'o', 'var(--bat)');
         }
       }
 
@@ -832,6 +852,17 @@
         ? `<span class=\"glyph\" style=\"color:${cell.color}\">${escapeHtml(cell.char)}</span>`
         : escapeHtml(cell.char)).join(''));
       screen.innerHTML = lines.join('\n');
+
+      const entities = [];
+      const pushEntity = (x, y, char, color) => {
+        entities.push(`<span class="entity" style="left:${(x / GRID_W) * 100}%;top:${(y / GRID_H) * 100}%;color:${color}">${escapeHtml(char)}</span>`);
+      };
+      for(const b of state.bullets) pushEntity(b.x, b.y, b.char, 'var(--bullet)');
+      for(const e of state.enemies) pushEntity(e.x, e.y, e.char, e.hitFlash > 0 ? '#ffffff' : (e.color || 'var(--enemy)'));
+      for(const f of state.fx) pushEntity(f.x, f.y, f.char, f.color);
+      pushEntity(p.x, p.y, '@', 'var(--player)');
+      entityLayer.innerHTML = entities.join('');
+
       hpFill.style.width = `${(p.hp/p.maxHp)*100}%`;
       xpFill.style.width = `${(state.xp/state.xpToLevel)*100}%`;
       const shapeTag = state.levelDef?.wallPattern === 'shape' && state.shapeName ? ` · ${state.shapeName}` : '';
