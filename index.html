@@ -16,6 +16,7 @@
       --player: #73f0ff;
       --enemy: #ff6f7d;
       --bullet: #ffd166;
+      --pickup: #ffb347;
       --gem: #7dff95;
       --aura: #d4ff7a;
       --bat: #bda6ff;
@@ -191,7 +192,8 @@
         stakesLevel: 1,
         batsLevel: 0,
       },
-      enemies: [], bullets: [], gems: [], fx: [],
+      enemies: [], bullets: [], gems: [], pickups: [], fx: [],
+      activeWeapon: 'rifle',
       configs: { upgrades: [], enemyTypes: [], waves: [], levels: [] },
       levelDef: null,
       nextSpawnAt: 0,
@@ -225,6 +227,14 @@
       rogue: '#ffd166',
       survival: '#8bd3ff'
     };
+
+
+    const WEAPON_DROPS = [
+      { id: 'rifle', name: 'Rifle', glyph: 'R', color: '#ffd166', cooldownMult: 1, damageMult: 1, speed: 11, life: 0.9, pierce: 0, spread: 0, projectiles: 1, ricochet: false },
+      { id: 'machineGun', name: 'Machine Gun', glyph: 'M', color: '#9ae7ff', cooldownMult: 0.5, damageMult: 0.65, speed: 12, life: 0.8, pierce: 0, spread: 0.04, projectiles: 1, ricochet: false },
+      { id: 'laser', name: 'Laser', glyph: 'L', color: '#ff7aff', cooldownMult: 2.1, damageMult: 3.8, speed: 14.5, life: 1.1, pierce: 999, spread: 0, projectiles: 1, ricochet: false },
+      { id: 'shotgun', name: 'Shotgun', glyph: 'S', color: '#ffb347', cooldownMult: 1.45, damageMult: 0.8, speed: 10.4, life: 0.55, pierce: 0, spread: 0.24, projectiles: 4, ricochet: false }
+    ];
 
     function escapeHtml(ch){
       if(ch === '&') return '&amp;';
@@ -388,6 +398,8 @@
     }
 
     function getEnemyType(id){ return state.configs.enemyTypes.find(e => e.id === id); }
+    function getWeaponDrop(id){ return WEAPON_DROPS.find(w => w.id === id) || WEAPON_DROPS[0]; }
+    function randomWeaponDrop(){ return WEAPON_DROPS[Math.floor(Math.random() * WEAPON_DROPS.length)]; }
     function pickWeighted(mix){
       const total = mix.reduce((s,m)=>s+m.weight,0); let roll = Math.random()*total;
       for(const m of mix){ roll -= m.weight; if(roll <= 0) return m.type; }
@@ -425,21 +437,27 @@
       const p = state.player;
       const now = performance.now();
       const canFire = document.getElementById('autoFire').checked || state.joysticks.aim.active;
-      if(!canFire || now - p.lastShot < Math.max(120, p.cooldownMs)) return;
+      const weapon = getWeaponDrop(state.activeWeapon);
+      const cooldown = Math.max(90, p.cooldownMs * weapon.cooldownMult);
+      if(!canFire || now - p.lastShot < cooldown) return;
       p.lastShot = now;
       const aim = normalize(p.aimX, p.aimY);
-      const spread = p.stakesLevel >= 3 ? 0.15 : 0;
-      const count = p.stakesLevel >= 5 ? 2 : 1;
+      const weaponSpread = weapon.spread || 0;
+      const upgradeSpread = p.stakesLevel >= 3 ? 0.07 : 0;
+      const spread = weaponSpread + upgradeSpread;
+      const weaponCount = weapon.id === 'shotgun' ? (Math.random() < 0.5 ? 3 : 4) : weapon.projectiles;
+      const count = Math.max(1, weaponCount + (p.stakesLevel >= 5 ? 1 : 0));
       for(let i=0;i<count;i++){
-        const a = Math.atan2(aim.y, aim.x) + (i===0?-spread:spread);
+        const t = count === 1 ? 0 : (i / (count - 1)) * 2 - 1;
+        const a = Math.atan2(aim.y, aim.x) + t * spread;
         state.bullets.push({
           x:p.x, y:p.y,
-          vx:Math.cos(a)*(10.8 + p.stakesLevel), vy:Math.sin(a)*(10.8 + p.stakesLevel),
-          dmg:2 + p.damage + p.stakesLevel,
-          life:0.9,
-          pierce:Math.floor(p.stakesLevel/2),
+          vx:Math.cos(a)*(weapon.speed + p.stakesLevel * 0.4), vy:Math.sin(a)*(weapon.speed + p.stakesLevel * 0.4),
+          dmg:(2 + p.damage + p.stakesLevel * 0.45) * weapon.damageMult,
+          life:weapon.life,
+          pierce: weapon.pierce + Math.floor(p.stakesLevel/2),
           ricochet: p.stakesLevel >= 4 ? 1 : 0,
-          char: p.stakesLevel >= 4 ? '*' : '.'
+          char: weapon.id === 'laser' ? '=' : (p.stakesLevel >= 4 ? '*' : '.')
         });
       }
     }
@@ -531,6 +549,10 @@
         if(e.hp <= 0){
           state.kills++;
           state.gems.push({x:e.x,y:e.y,v:e.xp});
+          if(e.boss || Math.random() < 0.13){
+            const drop = randomWeaponDrop();
+            state.pickups.push({ x: e.x, y: e.y, weaponId: drop.id });
+          }
           state.enemies.splice(i,1);
         }
       }
@@ -567,6 +589,13 @@
         } else if(d < p.pickupRadius + 2.5){
           const n = normalize(p.x-g.x,p.y-g.y);
           g.x += n.x*0.06; g.y += n.y*0.06;
+        }
+      }
+      for(let i=state.pickups.length-1;i>=0;i--){
+        const pickup = state.pickups[i];
+        if(dist(p, pickup) < 0.9){
+          state.activeWeapon = pickup.weaponId;
+          state.pickups.splice(i, 1);
         }
       }
       while(state.xp >= state.xpToLevel){
@@ -666,6 +695,10 @@
       const glyphs = Array.from({length:GRID_H},()=>Array.from({length:GRID_W},()=> ({ char: ' ', color: '' })));
       for(let y=0;y<GRID_H;y++) for(let x=0;x<GRID_W;x++) if(state.walls[y]?.[x]) setCell(glyphs, x, y, '#', '#445b89');
       for(const g of state.gems){ setCell(glyphs, g.x|0, g.y|0, '+', 'var(--gem)'); }
+      for(const pickup of state.pickups){
+        const weapon = getWeaponDrop(pickup.weaponId);
+        setCell(glyphs, pickup.x|0, pickup.y|0, weapon.glyph, weapon.color || 'var(--pickup)');
+      }
       for(const b of state.bullets){ setCell(glyphs, b.x|0, b.y|0, b.char, 'var(--bullet)'); }
       for(const e of state.enemies){ setCell(glyphs, e.x|0, e.y|0, e.char, e.hitFlash > 0 ? '#ffffff' : (e.color || 'var(--enemy)')); }
       const p = state.player;
@@ -694,7 +727,7 @@
       screen.innerHTML = lines.join('\n');
       hpFill.style.width = `${(p.hp/p.maxHp)*100}%`;
       xpFill.style.width = `${(state.xp/state.xpToLevel)*100}%`;
-      stats.textContent = `Lv ${state.level} · ${fmtTime(state.timeSec)} · ${state.levelDef?.name || ''} · KOs ${state.kills}`;
+      stats.textContent = `Lv ${state.level} · ${fmtTime(state.timeSec)} · ${state.levelDef?.name || ''} · ${getWeaponDrop(state.activeWeapon).name} · KOs ${state.kills}`;
     }
 
     let last = performance.now();
