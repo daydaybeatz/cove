@@ -1,9 +1,36 @@
 [
   {
-    "id": "default",
-    "name": "Courtyard",
-    "durationSec": 300,
+    "id": "courtyard",
+    "name": "Drunken Garden",
+    "durationSec": 90,
     "bossIntervalSec": 90,
-    "waves": ["opening_swarm", "mid_pressure", "late_hunt"]
+    "waves": ["opening_swarm", "mid_pressure", "late_hunt"],
+    "wallPattern": "drunken",
+    "wallDensity": 0.2
+  },
+  {
+    "id": "bastion",
+    "name": "Broken Bastion",
+    "durationSec": 90,
+    "bossIntervalSec": 75,
+    "waves": ["opening_swarm", "mid_pressure", "late_hunt"],
+    "wallPattern": "cellular",
+    "wallDensity": 0.28
+  },
+  {
+    "id": "labyrinth",
+    "name": "Stone Labyrinth",
+    "durationSec": 90,
+    "bossIntervalSec": 70,
+    "waves": ["opening_swarm", "mid_pressure", "late_hunt"],
+    "wallPattern": "maze"
+  },
+  {
+    "id": "arena",
+    "name": "Grand Arena",
+    "durationSec": 120,
+    "bossIntervalSec": 60,
+    "waves": ["opening_swarm", "mid_pressure", "late_hunt"],
+    "wallPattern": "rings"
   }
 ]
