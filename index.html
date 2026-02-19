@@ -490,7 +490,7 @@
 
     function spawnParticles(kind, x, y, amount){
       const configs = {
-        blood: { chars: ['.', ',', ';', '*'], colors: ['#ff4040', '#ff7a2f', '#ffcc4d'], speed: [1.2, 4.1], life: [0.2, 0.9] },
+        blood: { chars: ['.'], colors: ['#ff3b3b', '#ff4a4a', '#ff5a5a'], speed: [2.2, 5.3], life: [0.22, 0.55] },
         blast: { chars: ['+', '*', 'x', ':'], colors: ['#ffd166', '#ff9f40', '#ff6b35'], speed: [0.8, 2.6], life: [0.15, 0.55] }
       };
       const cfg = configs[kind];
@@ -605,31 +605,26 @@
       state.player.hp = clamp(state.player.hp + 4, 0, state.player.maxHp);
     }
 
+    function circleBlocked(x, y, radius = 0.3){
+      return cellBlocked(Math.floor(x), Math.floor(y))
+        || cellBlocked(Math.floor(x + radius), Math.floor(y))
+        || cellBlocked(Math.floor(x - radius), Math.floor(y))
+        || cellBlocked(Math.floor(x), Math.floor(y + radius))
+        || cellBlocked(Math.floor(x), Math.floor(y - radius));
+    }
+
     function enemyLogic(dt){
       const p = state.player;
-      const now = performance.now();
-      if(now >= state.nextFlowUpdate){
-        updateFlowField();
-        state.nextFlowUpdate = now + 120;
-      }
       for(const e of state.enemies){
-        const ex = clamp(Math.floor(e.x), 0, GRID_W - 1);
-        const ey = clamp(Math.floor(e.y), 0, GRID_H - 1);
-        let best = {d: state.flowField[ey]?.[ex] ?? Infinity, x: ex, y: ey};
-        for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
-          const nx = ex + dx, ny = ey + dy;
-          if(nx < 0 || ny < 0 || nx >= GRID_W || ny >= GRID_H || cellBlocked(nx, ny)) continue;
-          const fd = state.flowField[ny]?.[nx] ?? Infinity;
-          if(fd < best.d) best = {d: fd, x: nx, y: ny};
-        }
-        const targetX = Number.isFinite(best.d) ? best.x + 0.5 : p.x;
-        const targetY = Number.isFinite(best.d) ? best.y + 0.5 : p.y;
-        const n = normalize(targetX - e.x, targetY - e.y);
-        e.x += n.x*e.speed*dt; e.y += n.y*e.speed*dt;
-        if(cellBlocked(Math.floor(e.x), Math.floor(e.y))){
-          e.x -= n.x*e.speed*dt;
-          e.y -= n.y*e.speed*dt;
-        }
+        const n = normalize(p.x - e.x, p.y - e.y);
+        const speed = e.speed * dt;
+        const nextX = clamp(e.x + n.x * speed, 0, GRID_W - 0.001);
+        const nextY = clamp(e.y + n.y * speed, 0, GRID_H - 0.001);
+        const steer = Math.sin((state.timeSec * 6) + e.x * 1.7 + e.y * 2.3) * speed * 0.45;
+        if(!circleBlocked(nextX, e.y)) e.x = nextX;
+        else if(!circleBlocked(e.x, e.y + steer)) e.y = clamp(e.y + steer, 0, GRID_H - 0.001);
+        if(!circleBlocked(e.x, nextY)) e.y = nextY;
+        else if(!circleBlocked(e.x + steer, e.y)) e.x = clamp(e.x + steer, 0, GRID_W - 0.001);
         if(dist(e,p) < 0.8){ p.hp -= e.touchDamage*dt; }
         e.hitFlash = Math.max(0, e.hitFlash - dt);
       }
@@ -789,8 +784,8 @@
       }
       const nextX = clamp(p.x + state.movement.vx * dt, 0, GRID_W - 0.001);
       const nextY = clamp(p.y + state.movement.vy * dt, 0, GRID_H - 0.001);
-      if(!cellBlocked(Math.floor(nextX), Math.floor(p.y))) p.x = nextX;
-      if(!cellBlocked(Math.floor(p.x), Math.floor(nextY))) p.y = nextY;
+      if(!circleBlocked(nextX, p.y, 0.32)) p.x = nextX;
+      if(!circleBlocked(p.x, nextY, 0.32)) p.y = nextY;
 
       const aim = state.joysticks.aim;
       if(aim.active && Math.hypot(aim.x, aim.y) > 0.2){
