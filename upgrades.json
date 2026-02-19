@@ -90,5 +90,317 @@
       "maxHp": 5,
       "heal": 2
     }
+  },
+  {
+    "id": "neonReflex",
+    "name": "Neon Reflex Booster",
+    "description": "Cyberware feedback loops boost movement speed.",
+    "theme": "cyber",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "moveSpeed": 0.28
+    }
+  },
+  {
+    "id": "sandevistanBurst",
+    "name": "Sandevistan Burst",
+    "description": "Time dilation lets you fire significantly faster.",
+    "theme": "cyber",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "cooldownMs": -65
+    }
+  },
+  {
+    "id": "monoEdge",
+    "name": "Mono-Edge Filament",
+    "description": "Razor monowire tuning increases weapon damage.",
+    "theme": "cyber",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "damage": 1
+    }
+  },
+  {
+    "id": "chromeLungs",
+    "name": "Chrome Lungs",
+    "description": "Augmented lungs improve sprint pacing.",
+    "theme": "cyber",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "moveSpeed": 0.24
+    }
+  },
+  {
+    "id": "synapticCache",
+    "name": "Synaptic Cache",
+    "description": "Neural cache smooths target acquisition and cadence.",
+    "theme": "cyber",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "cooldownMs": -55
+    }
+  },
+  {
+    "id": "daedricTemper",
+    "name": "Daedric Tempering",
+    "description": "Heavier forged strikes hit much harder.",
+    "theme": "skyrim",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "damage": 2
+    }
+  },
+  {
+    "id": "dragonBoneGreaves",
+    "name": "Dragonbone Greaves",
+    "description": "Legendary armor craft quickens your stride.",
+    "theme": "skyrim",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "moveSpeed": 0.26
+    }
+  },
+  {
+    "id": "wardingRune",
+    "name": "Warding Rune",
+    "description": "Arcane runes reinforce vitality.",
+    "theme": "skyrim",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "maxHp": 4,
+      "heal": 1
+    }
+  },
+  {
+    "id": "thuumFocus",
+    "name": "Thu'um Focus",
+    "description": "Battle shouts sharpen relentless offense.",
+    "theme": "skyrim",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "damage": 1,
+      "cooldownMs": -30
+    }
+  },
+  {
+    "id": "nightingaleStep",
+    "name": "Nightingale Step",
+    "description": "Silent assassin footwork boosts mobility.",
+    "theme": "skyrim",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "moveSpeed": 0.3
+    }
+  },
+  {
+    "id": "adrenalSurge",
+    "name": "Adrenal Surge",
+    "description": "Roguelike momentum spikes your attack speed.",
+    "theme": "rogue",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "cooldownMs": -60
+    }
+  },
+  {
+    "id": "bloodPrice",
+    "name": "Blood Price",
+    "description": "Risk-reward doctrine grants raw damage.",
+    "theme": "rogue",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "damage": 2
+    }
+  },
+  {
+    "id": "luckyFind",
+    "name": "Lucky Find",
+    "description": "Treasure hunter instinct increases XP pickup reach.",
+    "theme": "rogue",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "pickupRadius": 0.7
+    }
+  },
+  {
+    "id": "shadowDash",
+    "name": "Shadow Dash",
+    "description": "Evasive chaining increases move speed.",
+    "theme": "rogue",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "moveSpeed": 0.27
+    }
+  },
+  {
+    "id": "berserkerDice",
+    "name": "Berserker Dice",
+    "description": "High-roll aggression improves damage and fire rate.",
+    "theme": "rogue",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "damage": 1,
+      "cooldownMs": -35
+    }
+  },
+  {
+    "id": "ghostProtocol",
+    "name": "Ghost Protocol",
+    "description": "Cloaked routing improves movement and looting lanes.",
+    "theme": "cyber",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "moveSpeed": 0.2,
+      "pickupRadius": 0.5
+    }
+  },
+  {
+    "id": "overclockedCoils",
+    "name": "Overclocked Coils",
+    "description": "Weapon coils vent hotter plasma volleys.",
+    "theme": "cyber",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "damage": 1,
+      "cooldownMs": -25
+    }
+  },
+  {
+    "id": "railgunKinetics",
+    "name": "Railgun Kinetics",
+    "description": "Stability tuning pushes shot throughput.",
+    "theme": "cyber",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "cooldownMs": -50
+    }
+  },
+  {
+    "id": "blackIceShell",
+    "name": "Black ICE Shell",
+    "description": "Defensive ICE bolsters max HP.",
+    "theme": "cyber",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "maxHp": 5,
+      "heal": 2
+    }
+  },
+  {
+    "id": "streetSamurai",
+    "name": "Street Samurai Drill",
+    "description": "Combat drills improve precision and pace.",
+    "theme": "cyber",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "damage": 1,
+      "moveSpeed": 0.18
+    }
+  },
+  {
+    "id": "frostbiteOil",
+    "name": "Frostbite Oil",
+    "description": "Nord alchemy adds ruthless impact.",
+    "theme": "skyrim",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "damage": 1
+    }
+  },
+  {
+    "id": "stalhrimHeart",
+    "name": "Stalhrim Heart",
+    "description": "Ancient ice steel reinforces your life force.",
+    "theme": "skyrim",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "maxHp": 4
+    }
+  },
+  {
+    "id": "companionBond",
+    "name": "Companion Bond",
+    "description": "Shield-brother grit sustains your journey.",
+    "theme": "skyrim",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "maxHp": 3,
+      "heal": 2
+    }
+  },
+  {
+    "id": "riftRunner",
+    "name": "Rift Runner",
+    "description": "Portal-hopping instincts increase movement speed.",
+    "theme": "arcane",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "moveSpeed": 0.25
+    }
+  },
+  {
+    "id": "arcLightSigil",
+    "name": "Arc-Light Sigil",
+    "description": "Mystic sigils sharpen offensive spellwork.",
+    "theme": "arcane",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "damage": 1,
+      "cooldownMs": -20
+    }
+  },
+  {
+    "id": "voidPouch",
+    "name": "Void Pouch",
+    "description": "Pocket dimensions vacuum XP from afar.",
+    "theme": "arcane",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "pickupRadius": 0.8
+    }
+  },
+  {
+    "id": "grimContract",
+    "name": "Grim Contract",
+    "description": "Dark pact grants power at relentless tempo.",
+    "theme": "rogue",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "damage": 1,
+      "cooldownMs": -40
+    }
+  },
+  {
+    "id": "lastStand",
+    "name": "Last Stand Doctrine",
+    "description": "Survivor grit adds durability and healing.",
+    "theme": "survival",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "maxHp": 4,
+      "heal": 2
+    }
+  },
+  {
+    "id": "kineticStride",
+    "name": "Kinetic Stride",
+    "description": "Action-roguelike mobility rhythm boosts pace.",
+    "theme": "survival",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "moveSpeed": 0.3
+    }
+  },
+  {
+    "id": "headhunterRoutine",
+    "name": "Headhunter Routine",
+    "description": "Chain kills tune your offensive output.",
+    "theme": "survival",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "damage": 1,
+      "pickupRadius": 0.4
+    }
   }
 ]
