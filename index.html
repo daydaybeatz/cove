@@ -16,7 +16,7 @@
       --player: #73f0ff;
       --enemy: #ff6f7d;
       --bullet: #ffd166;
-      --pickup: #ffb347;
+      --pickup: #6cff8d;
       --gem: #7dff95;
       --aura: #d4ff7a;
       --bat: #bda6ff;
@@ -153,7 +153,6 @@
         <div class="opts">
           <label><input id="autoAim" type="checkbox" checked /> Auto-aim</label>
           <label><input id="autoFire" type="checkbox" checked /> Auto-fire</label>
-          <label><input id="gridMove" type="checkbox" /> Legacy grid movement</label>
         </div>
       </div>
       <div id="aimStick" class="stick"><div class="knob"></div></div>
@@ -207,7 +206,6 @@
       nextFlowUpdate: 0,
       levelStartTime: 0,
       levelIndex: 0,
-      gridStepAt: 0,
       shapeName: '',
       movement: { vx: 0, vy: 0 }
     };
@@ -490,6 +488,40 @@
       });
     }
 
+    function spawnParticles(kind, x, y, amount){
+      const configs = {
+        blood: { chars: ['.', ',', ';', '*'], colors: ['#ff4040', '#ff7a2f', '#ffcc4d'], speed: [1.2, 4.1], life: [0.2, 0.9] },
+        blast: { chars: ['+', '*', 'x', ':'], colors: ['#ffd166', '#ff9f40', '#ff6b35'], speed: [0.8, 2.6], life: [0.15, 0.55] }
+      };
+      const cfg = configs[kind];
+      if(!cfg) return;
+      for(let i=0;i<amount;i++){
+        const a = Math.random() * Math.PI * 2;
+        const speed = rand(cfg.speed[0], cfg.speed[1]);
+        state.fx.push({
+          x,
+          y,
+          vx: Math.cos(a) * speed,
+          vy: Math.sin(a) * speed,
+          life: rand(cfg.life[0], cfg.life[1]),
+          char: cfg.chars[Math.floor(Math.random() * cfg.chars.length)],
+          color: cfg.colors[Math.floor(Math.random() * cfg.colors.length)]
+        });
+      }
+    }
+
+    function fxLogic(dt){
+      for(let i=state.fx.length-1;i>=0;i--){
+        const f = state.fx[i];
+        f.life -= dt;
+        f.x += f.vx * dt;
+        f.y += f.vy * dt;
+        f.vx *= 0.9;
+        f.vy *= 0.9;
+        if(f.life <= 0) state.fx.splice(i, 1);
+      }
+    }
+
     function fire(){
       const p = state.player;
       const now = performance.now();
@@ -604,6 +636,7 @@
       for(let i=state.enemies.length-1;i>=0;i--){
         const e = state.enemies[i];
         if(e.hp <= 0){
+          spawnParticles('blood', e.x, e.y, e.boss ? 24 : 12);
           state.kills++;
           state.gems.push({x:e.x,y:e.y,v:e.xp});
           if(e.boss || Math.random() < 0.13){
@@ -620,7 +653,9 @@
       const gy = clamp(Math.floor(y), 0, GRID_H - 1);
       const hp = state.walls[gy]?.[gx] || 0;
       if(hp <= 0) return false;
-      state.walls[gy][gx] = Math.max(0, hp - dmg);
+      const nextHp = Math.max(0, hp - dmg);
+      state.walls[gy][gx] = nextHp;
+      if(nextHp <= 0) spawnParticles('blast', gx + 0.5, gy + 0.5, 8);
       return true;
     }
 
@@ -744,30 +779,18 @@
       const p = state.player;
       const move = state.joysticks.move;
       const m = normalize(move.x, move.y);
-      const gridMove = document.getElementById('gridMove').checked;
-      if(gridMove){
-        if(Math.hypot(move.x, move.y) > 0.35 && performance.now() >= state.gridStepAt){
-          const sx = Math.abs(move.x) > Math.abs(move.y) ? Math.sign(move.x) : 0;
-          const sy = sx ? 0 : Math.sign(move.y);
-          const nx = clamp(Math.floor(p.x) + sx, 0, GRID_W - 1);
-          const ny = clamp(Math.floor(p.y) + sy, 0, GRID_H - 1);
-          if(!cellBlocked(nx, ny)){ p.x = nx + 0.5; p.y = ny + 0.5; }
-          state.gridStepAt = performance.now() + 85;
-        }
-      } else {
-        const accel = 27;
-        const drag = 0.83;
-        state.movement.vx += (m.x * p.moveSpeed - state.movement.vx) * Math.min(1, dt * accel);
-        state.movement.vy += (m.y * p.moveSpeed - state.movement.vy) * Math.min(1, dt * accel);
-        if(Math.hypot(move.x, move.y) < 0.1){
-          state.movement.vx *= drag;
-          state.movement.vy *= drag;
-        }
-        const nextX = clamp(p.x + state.movement.vx * dt, 0, GRID_W - 0.001);
-        const nextY = clamp(p.y + state.movement.vy * dt, 0, GRID_H - 0.001);
-        if(!cellBlocked(Math.floor(nextX), Math.floor(p.y))) p.x = nextX;
-        if(!cellBlocked(Math.floor(p.x), Math.floor(nextY))) p.y = nextY;
+      const accel = 27;
+      const drag = 0.83;
+      state.movement.vx += (m.x * p.moveSpeed - state.movement.vx) * Math.min(1, dt * accel);
+      state.movement.vy += (m.y * p.moveSpeed - state.movement.vy) * Math.min(1, dt * accel);
+      if(Math.hypot(move.x, move.y) < 0.1){
+        state.movement.vx *= drag;
+        state.movement.vy *= drag;
       }
+      const nextX = clamp(p.x + state.movement.vx * dt, 0, GRID_W - 0.001);
+      const nextY = clamp(p.y + state.movement.vy * dt, 0, GRID_H - 0.001);
+      if(!cellBlocked(Math.floor(nextX), Math.floor(p.y))) p.x = nextX;
+      if(!cellBlocked(Math.floor(p.x), Math.floor(nextY))) p.y = nextY;
 
       const aim = state.joysticks.aim;
       if(aim.active && Math.hypot(aim.x, aim.y) > 0.2){
@@ -785,10 +808,11 @@
       for(const g of state.gems){ setCell(glyphs, g.x|0, g.y|0, '+', 'var(--gem)'); }
       for(const pickup of state.pickups){
         const weapon = getWeaponDrop(pickup.weaponId);
-        setCell(glyphs, pickup.x|0, pickup.y|0, weapon.glyph, weapon.color || 'var(--pickup)');
+        setCell(glyphs, pickup.x|0, pickup.y|0, weapon.glyph, 'var(--pickup)');
       }
       for(const b of state.bullets){ setCell(glyphs, b.x|0, b.y|0, b.char, 'var(--bullet)'); }
       for(const e of state.enemies){ setCell(glyphs, e.x|0, e.y|0, e.char, e.hitFlash > 0 ? '#ffffff' : (e.color || 'var(--enemy)')); }
+      for(const f of state.fx){ setCell(glyphs, f.x|0, f.y|0, f.char, f.color); }
       const p = state.player;
       setCell(glyphs, p.x|0, p.y|0, '@', 'var(--player)');
 
@@ -835,6 +859,7 @@
       batsTick(dt);
       bulletLogic(dt);
       enemyLogic(dt);
+      fxLogic(dt);
       pickupGems();
       render();
 
