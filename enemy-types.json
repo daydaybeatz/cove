@@ -7,7 +7,8 @@
     "speed": 1.1,
     "touchDamage": 5,
     "xp": 1,
-    "color": "#ff4040"
+    "color": "#ff4040",
+    "wallDamage": 0.5
   },
   {
     "id": "brute",
@@ -17,7 +18,8 @@
     "speed": 0.75,
     "touchDamage": 10,
     "xp": 3,
-    "color": "#ffb347"
+    "color": "#ffb347",
+    "wallDamage": 0.9
   },
   {
     "id": "wraith",
@@ -27,7 +29,20 @@
     "speed": 1.45,
     "touchDamage": 14,
     "xp": 5,
-    "color": "#ffd166"
+    "color": "#ffd166",
+    "wallDamage": 1.2
+  },
+  {
+    "id": "juggernaut",
+    "char": "☠",
+    "name": "Dread Juggernaut",
+    "hp": 220,
+    "speed": 0.45,
+    "touchDamage": 32,
+    "xp": 9,
+    "color": "#f8f0ff",
+    "size": 4,
+    "wallDamage": 4.8
   },
   {
     "id": "boss",
@@ -38,6 +53,7 @@
     "touchDamage": 20,
     "xp": 25,
     "color": "#ff7a3d",
-    "boss": true
+    "boss": true,
+    "wallDamage": 2.2
   }
 ]
