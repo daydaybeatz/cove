@@ -1,0 +1,9 @@
+[
+  {
+    "id": "default",
+    "name": "Courtyard",
+    "durationSec": 300,
+    "bossIntervalSec": 90,
+    "waves": ["opening_swarm", "mid_pressure", "late_hunt"]
+  }
+]

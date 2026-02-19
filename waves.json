@@ -1,0 +1,33 @@
+[
+  {
+    "id": "opening_swarm",
+    "startSec": 0,
+    "endSec": 60,
+    "spawnEveryMs": 900,
+    "mix": [
+      { "type": "batling", "weight": 85 },
+      { "type": "brute", "weight": 15 }
+    ]
+  },
+  {
+    "id": "mid_pressure",
+    "startSec": 60,
+    "endSec": 120,
+    "spawnEveryMs": 700,
+    "mix": [
+      { "type": "batling", "weight": 55 },
+      { "type": "brute", "weight": 30 },
+      { "type": "wraith", "weight": 15 }
+    ]
+  },
+  {
+    "id": "late_hunt",
+    "startSec": 120,
+    "endSec": 240,
+    "spawnEveryMs": 560,
+    "mix": [
+      { "type": "brute", "weight": 45 },
+      { "type": "wraith", "weight": 55 }
+    ]
+  }
+]

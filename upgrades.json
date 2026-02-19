@@ -1,0 +1,94 @@
+[
+  {
+    "id": "whip",
+    "name": "Whip",
+    "description": "Wide arc attack in aim direction. Pierces and knocks back.",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "damage": 4,
+      "cooldownMs": -100,
+      "arcDegrees": 8,
+      "pierce": 1
+    }
+  },
+  {
+    "id": "garlic",
+    "name": "Garlic Aura",
+    "description": "Damages enemies in a ring around you.",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "auraDamage": 1,
+      "auraRadius": 0.4
+    }
+  },
+  {
+    "id": "stakes",
+    "name": "Throwing Stakes",
+    "description": "Fires straight shots; upgrades add ricochet and pierce.",
+    "maxLevel": 6,
+    "effectsPerLevel": {
+      "projectileDamage": 1,
+      "projectileSpeed": 0.4,
+      "cooldownMs": -80,
+      "pierce": 1,
+      "ricochet": 1
+    }
+  },
+  {
+    "id": "bats",
+    "name": "Bat Swarm",
+    "description": "Orbiting projectiles shred nearby enemies.",
+    "maxLevel": 4,
+    "effectsPerLevel": {
+      "batCount": 1,
+      "batDamage": 1,
+      "batRadius": 0.25
+    }
+  },
+  {
+    "id": "damage",
+    "name": "+Damage",
+    "description": "Increase all outgoing damage.",
+    "maxLevel": 10,
+    "effectsPerLevel": {
+      "damage": 1
+    }
+  },
+  {
+    "id": "fireRate",
+    "name": "+Fire Rate",
+    "description": "Shoot faster.",
+    "maxLevel": 8,
+    "effectsPerLevel": {
+      "cooldownMs": -70
+    }
+  },
+  {
+    "id": "moveSpeed",
+    "name": "+Move Speed",
+    "description": "Move faster.",
+    "maxLevel": 8,
+    "effectsPerLevel": {
+      "moveSpeed": 0.35
+    }
+  },
+  {
+    "id": "pickupRadius",
+    "name": "+Pickup Radius",
+    "description": "Collect XP gems from farther away.",
+    "maxLevel": 8,
+    "effectsPerLevel": {
+      "pickupRadius": 0.6
+    }
+  },
+  {
+    "id": "maxHp",
+    "name": "+Max HP",
+    "description": "Increase max HP and heal some.",
+    "maxLevel": 6,
+    "effectsPerLevel": {
+      "maxHp": 5,
+      "heal": 2
+    }
+  }
+]
