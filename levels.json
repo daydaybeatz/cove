@@ -1,36 +1,34 @@
 [
   {
-    "id": "courtyard",
-    "name": "Drunken Garden",
+    "id": "glyph_garden",
+    "name": "Glyph Garden",
     "durationSec": 90,
     "bossIntervalSec": 90,
     "waves": ["opening_swarm", "mid_pressure", "late_hunt"],
-    "wallPattern": "drunken",
-    "wallDensity": 0.2
+    "wallPattern": "shape"
   },
   {
-    "id": "bastion",
-    "name": "Broken Bastion",
+    "id": "icon_forge",
+    "name": "Icon Forge",
     "durationSec": 90,
     "bossIntervalSec": 75,
     "waves": ["opening_swarm", "mid_pressure", "late_hunt"],
-    "wallPattern": "cellular",
-    "wallDensity": 0.28
+    "wallPattern": "shape"
   },
   {
-    "id": "labyrinth",
-    "name": "Stone Labyrinth",
+    "id": "rune_fields",
+    "name": "Rune Fields",
     "durationSec": 90,
     "bossIntervalSec": 70,
     "waves": ["opening_swarm", "mid_pressure", "late_hunt"],
-    "wallPattern": "maze"
+    "wallPattern": "shape"
   },
   {
-    "id": "arena",
-    "name": "Grand Arena",
+    "id": "totem_arena",
+    "name": "Totem Arena",
     "durationSec": 120,
     "bossIntervalSec": 60,
     "waves": ["opening_swarm", "mid_pressure", "late_hunt"],
-    "wallPattern": "rings"
+    "wallPattern": "shape"
   }
 ]

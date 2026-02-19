@@ -153,7 +153,7 @@
         <div class="opts">
           <label><input id="autoAim" type="checkbox" checked /> Auto-aim</label>
           <label><input id="autoFire" type="checkbox" checked /> Auto-fire</label>
-          <label><input id="gridMove" type="checkbox" /> Grid movement</label>
+          <label><input id="gridMove" type="checkbox" /> Legacy grid movement</label>
         </div>
       </div>
       <div id="aimStick" class="stick"><div class="knob"></div></div>
@@ -207,7 +207,9 @@
       nextFlowUpdate: 0,
       levelStartTime: 0,
       levelIndex: 0,
-      gridStepAt: 0
+      gridStepAt: 0,
+      shapeName: '',
+      movement: { vx: 0, vy: 0 }
     };
 
     const screen = document.getElementById('screen');
@@ -281,7 +283,7 @@
 
     function cellBlocked(x, y){
       if(x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) return true;
-      return !!state.walls[y]?.[x];
+      return (state.walls[y]?.[x] || 0) > 0;
     }
 
     function randomOpenCell(){
@@ -294,11 +296,11 @@
     }
 
     function buildMaze(){
-      const walls = Array.from({length: GRID_H}, (_, y) => Array.from({length: GRID_W}, (_, x) => x % 2 === 0 || y % 2 === 0));
+      const walls = Array.from({length: GRID_H}, (_, y) => Array.from({length: GRID_W}, (_, x) => x % 2 === 0 || y % 2 === 0 ? 7 : 0));
       const visited = Array.from({length: GRID_H}, () => Array(GRID_W).fill(false));
       const stack = [{x: 1, y: 1}];
       visited[1][1] = true;
-      walls[1][1] = false;
+      walls[1][1] = 0;
       const dirs = [[2,0],[-2,0],[0,2],[0,-2]];
       while(stack.length){
         const cur = stack[stack.length - 1];
@@ -308,9 +310,58 @@
         if(!moves.length){ stack.pop(); continue; }
         const pick = moves[Math.floor(Math.random() * moves.length)];
         visited[pick.y][pick.x] = true;
-        walls[cur.y + pick.dy / 2][cur.x + pick.dx / 2] = false;
-        walls[pick.y][pick.x] = false;
+        walls[cur.y + pick.dy / 2][cur.x + pick.dx / 2] = 0;
+        walls[pick.y][pick.x] = 0;
         stack.push({x: pick.x, y: pick.y});
+      }
+      return walls;
+    }
+
+    function emptyWallGrid(){ return Array.from({length: GRID_H}, () => Array(GRID_W).fill(0)); }
+    function paintCell(walls, x, y, hp = 7){ if(x>=1&&y>=1&&x<GRID_W-1&&y<GRID_H-1) walls[y][x] = hp; }
+
+    function carveShape(shape){
+      const walls = emptyWallGrid();
+      const cx = Math.floor(GRID_W / 2), cy = Math.floor(GRID_H / 2);
+      if(shape === 'skull'){
+        for(let y=2;y<GRID_H-3;y++) for(let x=5;x<GRID_W-5;x++){
+          const dx = (x-cx)/15, dy = (y-(cy-2))/9;
+          if(dx*dx + dy*dy < 1) paintCell(walls, x, y, 8);
+        }
+        for(let y=cy-5;y<=cy-2;y++) for(const x of [cx-6,cx-5,cx+5,cx+6]) walls[y][x] = 0;
+        for(let y=cy+2;y<cy+8;y++) for(let x=cx-7;x<=cx+7;x++) if((x+y)%3!==0) paintCell(walls, x, y, 6);
+      }
+      if(shape === 'sword'){
+        for(let y=4;y<GRID_H-5;y++) for(let x=cx-1;x<=cx+1;x++) paintCell(walls, x, y, 8);
+        for(let i=0;i<6;i++) for(let x=cx-3+i;x<=cx+3-i;x++) paintCell(walls, x, 3+i, 8);
+        for(let x=cx-5;x<=cx+5;x++) paintCell(walls, x, GRID_H-6, 7);
+        for(let y=GRID_H-5;y<GRID_H-2;y++) for(let x=cx-2;x<=cx+2;x++) paintCell(walls, x, y, 7);
+      }
+      if(shape === 'potion'){
+        for(let y=4;y<9;y++) for(let x=cx-2;x<=cx+2;x++) paintCell(walls, x, y, 7);
+        for(let y=8;y<GRID_H-4;y++) for(let x=6;x<GRID_W-6;x++){
+          const dx=(x-cx)/14, dy=(y-(cy+2))/9;
+          if(dx*dx + dy*dy < 1) paintCell(walls, x, y, 7);
+        }
+      }
+      if(shape === 'shield'){
+        for(let y=3;y<GRID_H-3;y++) for(let x=6;x<GRID_W-6;x++){
+          const dx=(x-cx)/14, dy=(y-(cy-2))/10;
+          if(dx*dx + dy*dy < 1.05 && y < cy+6-Math.abs(dx*3)) paintCell(walls, x, y, 8);
+        }
+      }
+      if(shape === 'tree'){
+        for(let y=5;y<cy+5;y++) for(let x=8;x<GRID_W-8;x++){
+          const dx=(x-cx)/(15-(y-5)*0.4), dy=(y-(cy-2))/10;
+          if(dx*dx + dy*dy < 1) paintCell(walls, x, y, 6);
+        }
+        for(let y=cy+4;y<GRID_H-2;y++) for(let x=cx-2;x<=cx+2;x++) paintCell(walls, x, y, 9);
+      }
+      if(shape === 'mountain'){
+        for(let y=4;y<GRID_H-2;y++){
+          const width = Math.floor((y-3) * 1.25);
+          for(let x=cx-width; x<=cx+width; x++) if(Math.random() > 0.08 || y > cy+4) paintCell(walls, x, y, 8);
+        }
       }
       return walls;
     }
@@ -318,24 +369,24 @@
     function generateWalls(){
       const pattern = state.levelDef?.wallPattern || 'drunken';
       const density = state.levelDef?.wallDensity || 0.2;
-      const walls = Array.from({length: GRID_H}, () => Array(GRID_W).fill(false));
+      const walls = emptyWallGrid();
       if(pattern === 'drunken'){
         const target = Math.floor(GRID_W * GRID_H * density);
         let x = Math.floor(GRID_W / 2), y = Math.floor(GRID_H / 2), carved = 0;
         while(carved < target){
-          if(x > 1 && y > 1 && x < GRID_W - 2 && y < GRID_H - 2 && !walls[y][x]){ walls[y][x] = true; carved++; }
+          if(x > 1 && y > 1 && x < GRID_W - 2 && y < GRID_H - 2 && !walls[y][x]){ walls[y][x] = 7; carved++; }
           const d = [[1,0],[-1,0],[0,1],[0,-1]][Math.floor(Math.random() * 4)];
           x = clamp(x + d[0], 1, GRID_W - 2);
           y = clamp(y + d[1], 1, GRID_H - 2);
         }
       } else if(pattern === 'cellular'){
-        for(let y=1;y<GRID_H-1;y++) for(let x=1;x<GRID_W-1;x++) walls[y][x] = Math.random() < density;
+        for(let y=1;y<GRID_H-1;y++) for(let x=1;x<GRID_W-1;x++) walls[y][x] = Math.random() < density ? 7 : 0;
         for(let pass=0; pass<3; pass++){
           const next = walls.map(row => row.slice());
           for(let y=1;y<GRID_H-1;y++) for(let x=1;x<GRID_W-1;x++){
             let n = 0;
             for(let oy=-1;oy<=1;oy++) for(let ox=-1;ox<=1;ox++) if(ox||oy) n += walls[y+oy][x+ox] ? 1 : 0;
-            next[y][x] = n >= 5;
+            next[y][x] = n >= 5 ? 7 : 0;
           }
           for(let y=1;y<GRID_H-1;y++) for(let x=1;x<GRID_W-1;x++) walls[y][x] = next[y][x];
         }
@@ -346,8 +397,12 @@
         for(let y=1;y<GRID_H-1;y++) for(let x=1;x<GRID_W-1;x++){
           const dx = x - cx, dy = y - cy;
           const d = Math.hypot(dx * 0.7, dy);
-          if((Math.abs(d - 6) < 0.7 || Math.abs(d - 11) < 0.7) && !(Math.abs(dx) < 2 || Math.abs(dy) < 2)) walls[y][x] = true;
+          if((Math.abs(d - 6) < 0.7 || Math.abs(d - 11) < 0.7) && !(Math.abs(dx) < 2 || Math.abs(dy) < 2)) walls[y][x] = 8;
         }
+      } else if(pattern === 'shape'){
+        const shapes = ['skull', 'sword', 'potion', 'shield', 'tree', 'mountain'];
+        state.shapeName = shapes[Math.floor(Math.random() * shapes.length)];
+        return carveShape(state.shapeName);
       }
       return walls;
     }
@@ -359,6 +414,8 @@
       state.player.y = spawn.y;
       state.flowField = [];
       state.nextFlowUpdate = 0;
+      state.movement.vx = 0;
+      state.movement.vy = 0;
     }
 
     function updateFlowField(){
@@ -558,11 +615,20 @@
       }
     }
 
+    function damageWallAt(x, y, dmg){
+      const gx = clamp(Math.floor(x), 0, GRID_W - 1);
+      const gy = clamp(Math.floor(y), 0, GRID_H - 1);
+      const hp = state.walls[gy]?.[gx] || 0;
+      if(hp <= 0) return false;
+      state.walls[gy][gx] = Math.max(0, hp - dmg);
+      return true;
+    }
+
     function bulletLogic(dt){
       for(let i=state.bullets.length-1;i>=0;i--){
         const b = state.bullets[i];
         b.x += b.vx*dt; b.y += b.vy*dt; b.life -= dt;
-        const hitWall = cellBlocked(Math.floor(b.x), Math.floor(b.y));
+        const hitWall = damageWallAt(b.x, b.y, Math.max(1, b.dmg * 0.9));
         if(b.x<0||b.x>=GRID_W||b.y<0||b.y>=GRID_H||hitWall){
           if(b.ricochet>0){ b.ricochet--; b.vx*=-1; b.vy*=-1; }
           else { state.bullets.splice(i,1); continue; }
@@ -616,7 +682,7 @@
         btn.className = 'choice';
         btn.style.borderLeftColor = upgradeColor(up);
         btn.style.color = upgradeColor(up);
-        btn.textContent = `${up.name}: ${up.description}`;
+        btn.textContent = `${up.name}: ${upgradeSummary(up)}`;
         btn.onclick = () => { applyUpgrade(up); overlay.style.display='none'; state.paused=false; };
         choices.appendChild(btn);
       }
@@ -635,6 +701,19 @@
       if(fx.pickupRadius) p.pickupRadius += fx.pickupRadius;
       if(fx.maxHp){ p.maxHp += fx.maxHp; p.hp += (fx.heal || 0); }
       p.hp = clamp(p.hp,0,p.maxHp);
+    }
+
+
+    function upgradeSummary(up){
+      const parts = [up.description];
+      const fx = up.effectsPerLevel || {};
+      if(fx.damage) parts.push(`DMG +${fx.damage}`);
+      if(fx.cooldownMs) parts.push(`Fire rate ${fx.cooldownMs < 0 ? '+' : '-'}${Math.abs(fx.cooldownMs)}ms`);
+      if(fx.moveSpeed) parts.push(`Move +${fx.moveSpeed.toFixed(2)}`);
+      if(fx.pickupRadius) parts.push(`Pickup +${fx.pickupRadius.toFixed(2)}`);
+      if(fx.maxHp) parts.push(`Max HP +${fx.maxHp}`);
+      if(fx.heal) parts.push(`Heal +${fx.heal}`);
+      return parts.join(' · ');
     }
 
     function spawnLogic(){
@@ -657,6 +736,7 @@
       state.levelDef = state.configs.levels[state.levelIndex];
       state.levelStartTime = state.timeSec;
       state.nextBossAt = state.timeSec + state.levelDef.bossIntervalSec;
+      state.shapeName = '';
       rebuildLevelGeometry();
     }
 
@@ -675,25 +755,33 @@
           state.gridStepAt = performance.now() + 85;
         }
       } else {
-        const nextX = clamp(p.x + m.x * p.moveSpeed * dt, 0, GRID_W - 0.001);
-        const nextY = clamp(p.y + m.y * p.moveSpeed * dt, 0, GRID_H - 0.001);
+        const accel = 27;
+        const drag = 0.83;
+        state.movement.vx += (m.x * p.moveSpeed - state.movement.vx) * Math.min(1, dt * accel);
+        state.movement.vy += (m.y * p.moveSpeed - state.movement.vy) * Math.min(1, dt * accel);
+        if(Math.hypot(move.x, move.y) < 0.1){
+          state.movement.vx *= drag;
+          state.movement.vy *= drag;
+        }
+        const nextX = clamp(p.x + state.movement.vx * dt, 0, GRID_W - 0.001);
+        const nextY = clamp(p.y + state.movement.vy * dt, 0, GRID_H - 0.001);
         if(!cellBlocked(Math.floor(nextX), Math.floor(p.y))) p.x = nextX;
         if(!cellBlocked(Math.floor(p.x), Math.floor(nextY))) p.y = nextY;
       }
 
       const aim = state.joysticks.aim;
       if(aim.active && Math.hypot(aim.x, aim.y) > 0.2){
-        p.aimX = aim.x; p.aimY = aim.y;
+        p.aimX += (aim.x - p.aimX) * Math.min(1, dt * 20); p.aimY += (aim.y - p.aimY) * Math.min(1, dt * 20);
       } else if(document.getElementById('autoAim').checked && state.enemies.length){
         const nearest = state.enemies.reduce((best,e)=> dist(p,e) < dist(p,best)?e:best, state.enemies[0]);
-        p.aimX = nearest.x - p.x; p.aimY = nearest.y - p.y;
+        p.aimX += (nearest.x - p.x - p.aimX) * Math.min(1, dt * 10); p.aimY += (nearest.y - p.y - p.aimY) * Math.min(1, dt * 10);
       }
       fire();
     }
 
     function render(){
       const glyphs = Array.from({length:GRID_H},()=>Array.from({length:GRID_W},()=> ({ char: ' ', color: '' })));
-      for(let y=0;y<GRID_H;y++) for(let x=0;x<GRID_W;x++) if(state.walls[y]?.[x]) setCell(glyphs, x, y, '#', '#445b89');
+      for(let y=0;y<GRID_H;y++) for(let x=0;x<GRID_W;x++){ const hp = state.walls[y]?.[x] || 0; if(hp <= 0) continue; const char = hp > 6 ? '#': (hp > 3 ? '%' : ':'); const color = hp > 6 ? '#5f78b0' : (hp > 3 ? '#4e6290' : '#3c4d70'); setCell(glyphs, x, y, char, color); }
       for(const g of state.gems){ setCell(glyphs, g.x|0, g.y|0, '+', 'var(--gem)'); }
       for(const pickup of state.pickups){
         const weapon = getWeaponDrop(pickup.weaponId);
@@ -727,7 +815,8 @@
       screen.innerHTML = lines.join('\n');
       hpFill.style.width = `${(p.hp/p.maxHp)*100}%`;
       xpFill.style.width = `${(state.xp/state.xpToLevel)*100}%`;
-      stats.textContent = `Lv ${state.level} · ${fmtTime(state.timeSec)} · ${state.levelDef?.name || ''} · ${getWeaponDrop(state.activeWeapon).name} · KOs ${state.kills}`;
+      const shapeTag = state.levelDef?.wallPattern === 'shape' && state.shapeName ? ` · ${state.shapeName}` : '';
+      stats.textContent = `Lv ${state.level} · ${fmtTime(state.timeSec)} · ${state.levelDef?.name || ''}${shapeTag} · ${getWeaponDrop(state.activeWeapon).name} · KOs ${state.kills}`;
     }
 
     let last = performance.now();
