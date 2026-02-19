@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>ASCII Survivors</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --fg: #f7f7f7;
+      --muted: #91a0b8;
+      --panel: #111522;
+      --accent: #6ae3ff;
+      --hp: #ff5c5c;
+      --xp: #89ff8f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: var(--bg);
+      color: var(--fg);
+      touch-action: none;
+      overscroll-behavior: none;
+      user-select: none;
+    }
+    .app {
+      min-height: 100svh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 8px;
+      padding: max(10px, env(safe-area-inset-top)) 10px max(14px, env(safe-area-inset-bottom));
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      font-size: 14px;
+    }
+    .bar {
+      height: 10px;
+      background: #1d2436;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .fill { height: 100%; }
+    .hp-fill { background: var(--hp); }
+    .xp-fill { background: var(--xp); }
+    #screen {
+      margin: 0;
+      background: #080b12;
+      border: 1px solid #1e2a44;
+      border-radius: 10px;
+      font-size: clamp(14px, 2.6vw, 20px);
+      line-height: 1;
+      letter-spacing: 0.02em;
+      padding: 8px;
+      white-space: pre;
+      overflow: hidden;
+      color: #dbe8ff;
+      min-height: 56vh;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: end;
+      gap: 10px;
+    }
+    .stick {
+      width: min(42vw, 180px);
+      aspect-ratio: 1;
+      border: 2px solid #2a3452;
+      border-radius: 50%;
+      position: relative;
+      background: radial-gradient(circle at center, #12192b 0%, #0d1220 70%);
+    }
+    .knob {
+      width: 44%;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: #6a7fb4;
+      opacity: 0.85;
+      position: absolute;
+      left: 28%;
+      top: 28%;
+      pointer-events: none;
+    }
+    .buttons {
+      display: grid;
+      gap: 8px;
+      align-self: center;
+      justify-items: center;
+    }
+    button, label {
+      font: inherit;
+      color: var(--fg);
+      background: var(--panel);
+      border: 1px solid #2a3552;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    button:active { transform: scale(0.97); }
+    .opts { display: grid; gap: 6px; font-size: 12px; color: var(--muted); }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(2,5,10,0.88);
+      display: none;
+      place-items: center;
+      z-index: 10;
+      padding: 16px;
+    }
+    .card {
+      max-width: 720px;
+      width: 100%;
+      border: 1px solid #2d3f6d;
+      background: #0e1424;
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .choices { display: grid; gap: 8px; }
+    .choice { width: 100%; text-align: left; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="hud">
+      <div>
+        <div>HP</div>
+        <div class="bar"><div id="hpFill" class="fill hp-fill" style="width:100%"></div></div>
+        <div>XP</div>
+        <div class="bar"><div id="xpFill" class="fill xp-fill" style="width:0%"></div></div>
+      </div>
+      <div id="stats">Lv 1 · 00:00 · KOs 0</div>
+    </div>
+
+    <pre id="screen"></pre>
+
+    <div class="controls">
+      <div id="moveStick" class="stick"><div class="knob"></div></div>
+      <div class="buttons">
+        <button id="abilityBtn">PANIC</button>
+        <div class="opts">
+          <label><input id="autoAim" type="checkbox" checked /> Auto-aim</label>
+          <label><input id="autoFire" type="checkbox" checked /> Auto-fire</label>
+        </div>
+      </div>
+      <div id="aimStick" class="stick"><div class="knob"></div></div>
+    </div>
+  </div>
+
+  <div id="upgradeOverlay" class="overlay">
+    <div class="card">
+      <h3>Level Up — choose 1</h3>
+      <div id="choices" class="choices"></div>
+    </div>
+  </div>
+
+  <script>
+    const GRID_W = 48, GRID_H = 27;
+    const TICK = 1000 / 30;
+
+    const state = {
+      timeSec: 0,
+      kills: 0,
+      paused: false,
+      level: 1,
+      xp: 0,
+      xpToLevel: 10,
+      player: {
+        x: 0, y: 0,
+        hp: 30, maxHp: 30,
+        moveSpeed: 4.5,
+        damage: 1,
+        pickupRadius: 1.8,
+        cooldownMs: 520,
+        lastShot: 0,
+        aimX: 1, aimY: 0,
+        whipLevel: 0,
+        garlicLevel: 0,
+        stakesLevel: 1,
+        batsLevel: 0,
+      },
+      enemies: [], bullets: [], gems: [], fx: [],
+      configs: { upgrades: [], enemyTypes: [], waves: [], levels: [] },
+      levelDef: null,
+      nextSpawnAt: 0,
+      nextBossAt: 0,
+      joysticks: {
+        move: { x:0, y:0, active:false },
+        aim:  { x:1, y:0, active:false }
+      }
+    };
+
+    const screen = document.getElementById('screen');
+    const hpFill = document.getElementById('hpFill');
+    const xpFill = document.getElementById('xpFill');
+    const stats = document.getElementById('stats');
+    const overlay = document.getElementById('upgradeOverlay');
+    const choices = document.getElementById('choices');
+
+    function fmtTime(s){ const m = Math.floor(s/60); const r = Math.floor(s%60); return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`; }
+    function rand(a,b){ return Math.random()*(b-a)+a; }
+    function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+    function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
+    function normalize(x,y){ const d=Math.hypot(x,y)||1; return {x:x/d, y:y/d}; }
+
+    async function loadJson(path){ const r = await fetch(path); if(!r.ok) throw new Error(`Missing ${path}`); return r.json(); }
+    async function boot(){
+      state.configs.upgrades = await loadJson('./upgrades.json');
+      state.configs.enemyTypes = await loadJson('./enemy-types.json');
+      state.configs.waves = await loadJson('./waves.json');
+      state.configs.levels = await loadJson('./levels.json');
+      state.levelDef = state.configs.levels[0];
+      state.nextBossAt = state.levelDef.bossIntervalSec;
+      resetPlayer();
+      bindStick('moveStick', 'move');
+      bindStick('aimStick', 'aim');
+      document.getElementById('abilityBtn').addEventListener('click', panicBomb);
+      setInterval(loop, TICK);
+    }
+
+    function resetPlayer(){ state.player.x = GRID_W/2; state.player.y = GRID_H/2; }
+
+    function bindStick(id, key){
+      const el = document.getElementById(id), knob = el.querySelector('.knob');
+      const joy = state.joysticks[key];
+      function update(clientX, clientY){
+        const rect = el.getBoundingClientRect();
+        const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+        let dx = (clientX - cx) / (rect.width/2), dy = (clientY - cy) / (rect.height/2);
+        const mag = Math.hypot(dx,dy); if(mag > 1){ dx/=mag; dy/=mag; }
+        joy.x = dx; joy.y = dy;
+        knob.style.left = `${28 + dx * 26}%`;
+        knob.style.top = `${28 + dy * 26}%`;
+      }
+      function clear(){ joy.x=0; joy.y=0; joy.active=false; knob.style.left='28%'; knob.style.top='28%'; }
+      el.addEventListener('pointerdown', e=>{ joy.active=true; update(e.clientX,e.clientY); el.setPointerCapture(e.pointerId); });
+      el.addEventListener('pointermove', e=> joy.active && update(e.clientX,e.clientY));
+      el.addEventListener('pointerup', clear);
+      el.addEventListener('pointercancel', clear);
+    }
+
+    function getEnemyType(id){ return state.configs.enemyTypes.find(e => e.id === id); }
+    function pickWeighted(mix){
+      const total = mix.reduce((s,m)=>s+m.weight,0); let roll = Math.random()*total;
+      for(const m of mix){ roll -= m.weight; if(roll <= 0) return m.type; }
+      return mix[0].type;
+    }
+
+    function currentWave(){
+      const t = state.timeSec;
+      return state.configs.waves.find(w => t >= w.startSec && t < w.endSec) || state.configs.waves[state.configs.waves.length-1];
+    }
+
+    function spawnEnemy(typeId){
+      const t = getEnemyType(typeId); if(!t) return;
+      const side = Math.floor(Math.random()*4);
+      let x=0,y=0;
+      if(side===0){ x=rand(0,GRID_W); y=-1; }
+      if(side===1){ x=GRID_W+1; y=rand(0,GRID_H); }
+      if(side===2){ x=rand(0,GRID_W); y=GRID_H+1; }
+      if(side===3){ x=-1; y=rand(0,GRID_H); }
+      state.enemies.push({
+        x,y,type:t.id,char:t.char,color:t.color,
+        hp:t.hp + state.timeSec*0.05,
+        speed:t.speed,
+        touchDamage:t.touchDamage,
+        xp:t.xp,
+        boss: !!t.boss,
+        hitFlash:0
+      });
+    }
+
+    function fire(){
+      const p = state.player;
+      const now = performance.now();
+      const canFire = document.getElementById('autoFire').checked || state.joysticks.aim.active;
+      if(!canFire || now - p.lastShot < Math.max(120, p.cooldownMs)) return;
+      p.lastShot = now;
+      const aim = normalize(p.aimX, p.aimY);
+      const spread = p.stakesLevel >= 3 ? 0.15 : 0;
+      const count = p.stakesLevel >= 5 ? 2 : 1;
+      for(let i=0;i<count;i++){
+        const a = Math.atan2(aim.y, aim.x) + (i===0?-spread:spread);
+        state.bullets.push({
+          x:p.x, y:p.y,
+          vx:Math.cos(a)*(9 + p.stakesLevel), vy:Math.sin(a)*(9 + p.stakesLevel),
+          dmg:2 + p.damage + p.stakesLevel,
+          life:0.9,
+          pierce:Math.floor(p.stakesLevel/2),
+          ricochet: p.stakesLevel >= 4 ? 1 : 0,
+          char: p.stakesLevel >= 4 ? '*' : '.'
+        });
+      }
+    }
+
+    function whipTick(dt){
+      const p = state.player;
+      if(p.whipLevel <= 0) return;
+      if(Math.random() > dt * (0.7 + p.whipLevel*0.2)) return;
+      const arc = Math.PI * (0.35 + p.whipLevel * 0.04);
+      const forward = Math.atan2(p.aimY,p.aimX);
+      for(const e of state.enemies){
+        const d = dist(p,e); if(d > 3.8 + p.whipLevel*0.25) continue;
+        const a = Math.atan2(e.y-p.y,e.x-p.x);
+        let diff = Math.abs(a-forward); if(diff > Math.PI) diff = 2*Math.PI - diff;
+        if(diff <= arc/2){
+          e.hp -= 3 + p.damage + p.whipLevel;
+          const n = normalize(e.x-p.x,e.y-p.y);
+          e.x += n.x*(0.5 + p.whipLevel*0.08);
+          e.y += n.y*(0.5 + p.whipLevel*0.08);
+          e.hitFlash = 0.15;
+        }
+      }
+    }
+
+    function garlicTick(dt){
+      const p = state.player;
+      if(p.garlicLevel <= 0) return;
+      const r = 1.2 + p.garlicLevel * 0.45;
+      for(const e of state.enemies){
+        if(dist(p,e) <= r){ e.hp -= dt * (2 + p.garlicLevel + p.damage*0.4); e.hitFlash = 0.05; }
+      }
+    }
+
+    function batsTick(dt){
+      if(state.player.batsLevel <= 0) return;
+      const p = state.player;
+      const count = p.batsLevel + 1;
+      for(let i=0;i<count;i++){
+        const a = state.timeSec*2.2 + (Math.PI*2/count)*i;
+        const r = 1.8 + p.batsLevel*0.25;
+        const bx = p.x + Math.cos(a)*r, by = p.y + Math.sin(a)*r;
+        for(const e of state.enemies){
+          if(Math.hypot(e.x-bx,e.y-by) < 0.8){
+            e.hp -= dt*(7 + p.batsLevel + p.damage*0.4);
+            e.hitFlash = 0.05;
+          }
+        }
+      }
+    }
+
+    function panicBomb(){
+      for(const e of state.enemies){
+        const d = dist(state.player,e);
+        if(d < 8){ e.hp -= 26; e.hitFlash = 0.2; }
+      }
+      state.player.hp = clamp(state.player.hp + 4, 0, state.player.maxHp);
+    }
+
+    function enemyLogic(dt){
+      const p = state.player;
+      for(const e of state.enemies){
+        const n = normalize(p.x-e.x,p.y-e.y);
+        e.x += n.x*e.speed*dt; e.y += n.y*e.speed*dt;
+        if(dist(e,p) < 0.8){ p.hp -= e.touchDamage*dt; }
+        e.hitFlash = Math.max(0, e.hitFlash - dt);
+      }
+      for(let i=state.enemies.length-1;i>=0;i--){
+        const e = state.enemies[i];
+        if(e.hp <= 0){
+          state.kills++;
+          state.gems.push({x:e.x,y:e.y,v:e.xp});
+          state.enemies.splice(i,1);
+        }
+      }
+    }
+
+    function bulletLogic(dt){
+      for(let i=state.bullets.length-1;i>=0;i--){
+        const b = state.bullets[i];
+        b.x += b.vx*dt; b.y += b.vy*dt; b.life -= dt;
+        if(b.x<0||b.x>=GRID_W||b.y<0||b.y>=GRID_H){
+          if(b.ricochet>0){ b.ricochet--; b.vx*=-1; b.vy*=-1; }
+          else { state.bullets.splice(i,1); continue; }
+        }
+        let used = false;
+        for(const e of state.enemies){
+          if(Math.hypot(e.x-b.x,e.y-b.y) < 0.55){
+            e.hp -= b.dmg; e.hitFlash=0.07;
+            if(b.pierce > 0){ b.pierce--; } else { used = true; break; }
+          }
+        }
+        if(used || b.life <= 0) state.bullets.splice(i,1);
+      }
+    }
+
+    function pickupGems(){
+      const p = state.player;
+      for(let i=state.gems.length-1;i>=0;i--){
+        const g = state.gems[i], d = dist(p,g);
+        if(d < p.pickupRadius){
+          p.xpGain = (p.xpGain||0)+g.v;
+          state.xp += g.v;
+          state.gems.splice(i,1);
+        } else if(d < p.pickupRadius + 2.5){
+          const n = normalize(p.x-g.x,p.y-g.y);
+          g.x += n.x*0.06; g.y += n.y*0.06;
+        }
+      }
+      while(state.xp >= state.xpToLevel){
+        state.xp -= state.xpToLevel;
+        state.level++;
+        state.xpToLevel = Math.floor(state.xpToLevel * 1.25 + 4);
+        levelUp();
+      }
+    }
+
+    function levelUp(){
+      state.paused = true;
+      overlay.style.display = 'grid';
+      const picks = [...state.configs.upgrades].sort(()=>Math.random()-0.5).slice(0,3);
+      choices.innerHTML = '';
+      for(const up of picks){
+        const btn = document.createElement('button');
+        btn.className = 'choice';
+        btn.textContent = `${up.name}: ${up.description}`;
+        btn.onclick = () => { applyUpgrade(up); overlay.style.display='none'; state.paused=false; };
+        choices.appendChild(btn);
+      }
+    }
+
+    function applyUpgrade(up){
+      const p = state.player;
+      if(up.id === 'whip') p.whipLevel++;
+      if(up.id === 'garlic') p.garlicLevel++;
+      if(up.id === 'stakes') p.stakesLevel++;
+      if(up.id === 'bats') p.batsLevel++;
+      const fx = up.effectsPerLevel || {};
+      if(fx.damage) p.damage += fx.damage;
+      if(fx.cooldownMs) p.cooldownMs += fx.cooldownMs;
+      if(fx.moveSpeed) p.moveSpeed += fx.moveSpeed;
+      if(fx.pickupRadius) p.pickupRadius += fx.pickupRadius;
+      if(fx.maxHp){ p.maxHp += fx.maxHp; p.hp += (fx.heal || 0); }
+      p.hp = clamp(p.hp,0,p.maxHp);
+    }
+
+    function spawnLogic(){
+      const now = performance.now();
+      const w = currentWave();
+      if(now >= state.nextSpawnAt){
+        spawnEnemy(pickWeighted(w.mix));
+        state.nextSpawnAt = now + w.spawnEveryMs;
+      }
+      if(state.timeSec >= state.nextBossAt){
+        spawnEnemy('boss');
+        state.nextBossAt += state.levelDef.bossIntervalSec;
+      }
+    }
+
+    function inputLogic(dt){
+      const p = state.player;
+      const move = state.joysticks.move;
+      const m = normalize(move.x, move.y);
+      p.x = clamp(p.x + m.x * p.moveSpeed * dt, 0, GRID_W-1);
+      p.y = clamp(p.y + m.y * p.moveSpeed * dt, 0, GRID_H-1);
+
+      const aim = state.joysticks.aim;
+      if(aim.active && Math.hypot(aim.x, aim.y) > 0.2){
+        p.aimX = aim.x; p.aimY = aim.y;
+      } else if(document.getElementById('autoAim').checked && state.enemies.length){
+        const nearest = state.enemies.reduce((best,e)=> dist(p,e) < dist(p,best)?e:best, state.enemies[0]);
+        p.aimX = nearest.x - p.x; p.aimY = nearest.y - p.y;
+      }
+      fire();
+    }
+
+    function render(){
+      const grid = Array.from({length:GRID_H},()=>Array.from({length:GRID_W},()=> ' '));
+      for(const g of state.gems){ if(g.x>=0&&g.y>=0&&g.x<GRID_W&&g.y<GRID_H) grid[g.y|0][g.x|0] = '+'; }
+      for(const b of state.bullets){ if(b.x>=0&&b.y>=0&&b.x<GRID_W&&b.y<GRID_H) grid[b.y|0][b.x|0] = b.char; }
+      for(const e of state.enemies){ if(e.x>=0&&e.y>=0&&e.x<GRID_W&&e.y<GRID_H) grid[e.y|0][e.x|0] = e.char; }
+      const p = state.player;
+      grid[p.y|0][p.x|0] = '@';
+
+      if(p.garlicLevel>0){
+        const r = 1.2 + p.garlicLevel*0.45;
+        for(let y=0;y<GRID_H;y++) for(let x=0;x<GRID_W;x++){
+          const d = Math.hypot(x-p.x,y-p.y);
+          if(d>r-0.4 && d<r+0.4 && grid[y][x]===' ') grid[y][x]='~';
+        }
+      }
+
+      if(p.batsLevel>0){
+        const count = p.batsLevel + 1;
+        for(let i=0;i<count;i++){
+          const a = state.timeSec*2.2 + (Math.PI*2/count)*i;
+          const r = 1.8 + p.batsLevel*0.25;
+          const x = (p.x + Math.cos(a)*r)|0, y = (p.y + Math.sin(a)*r)|0;
+          if(x>=0&&y>=0&&x<GRID_W&&y<GRID_H) grid[y][x] = 'o';
+        }
+      }
+
+      screen.textContent = grid.map(row=>row.join('')).join('\n');
+      hpFill.style.width = `${(p.hp/p.maxHp)*100}%`;
+      xpFill.style.width = `${(state.xp/state.xpToLevel)*100}%`;
+      stats.textContent = `Lv ${state.level} · ${fmtTime(state.timeSec)} · KOs ${state.kills}`;
+    }
+
+    let last = performance.now();
+    function loop(){
+      const now = performance.now();
+      const dt = Math.min(0.05, (now-last)/1000);
+      last = now;
+      if(state.paused) return;
+      state.timeSec += dt;
+
+      inputLogic(dt);
+      spawnLogic();
+      whipTick(dt);
+      garlicTick(dt);
+      batsTick(dt);
+      bulletLogic(dt);
+      enemyLogic(dt);
+      pickupGems();
+      render();
+
+      if(state.player.hp <= 0){
+        state.paused = true;
+        overlay.style.display = 'grid';
+        choices.innerHTML = `<div>Game Over. KOs: ${state.kills}. Refresh to retry.</div>`;
+      }
+    }
+
+    boot().catch(err => {
+      screen.textContent = 'Failed to load JSON files. Serve files over HTTP (not file://).\n' + err.message;
+    });
+  </script>
+</body>
+</html>
