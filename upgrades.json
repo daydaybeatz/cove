@@ -1,18 +1,143 @@
 [
-  {"id":"whip","name":"Count's Chain","description":"A vampire-slayer lash cleaves a wider arc.","theme":"gothic","maxLevel":5,"effectsPerLevel":{"damage":4,"cooldownMs":-100}},
-  {"id":"garlic","name":"Holy Garlic Sigil","description":"Consecrated vapors scorch foes nearby.","theme":"alchemy","maxLevel":5,"effectsPerLevel":{"auraDamage":1,"auraRadius":0.4}},
-  {"id":"stakes","name":"Runed Stakes","description":"Silvered rounds pierce deeper and fly truer.","theme":"weapon","maxLevel":6,"effectsPerLevel":{"projectileDamage":1,"projectileSpeed":0.4,"cooldownMs":-80,"pierce":1,"ricochet":1}},
-  {"id":"bats","name":"Night Brood","description":"Summon ravenous bat familiars.","theme":"gothic","maxLevel":4,"effectsPerLevel":{"batCount":1,"batDamage":1,"batRadius":0.25}},
-
-  {"id":"teleportStep","name":"Mist Step","description":"Active ability: blink in your movement direction.","theme":"ritual","maxLevel":5,"effectsPerLevel":{}},
-  {"id":"sentinelClone","name":"Pale Doppel","description":"Active ability: deploy a static gun-wielding clone.","theme":"relic","maxLevel":5,"effectsPerLevel":{}},
-  {"id":"graveWall","name":"Bone Rampart","description":"Active ability: leave a wall trail for 5 seconds.","theme":"ritual","maxLevel":5,"effectsPerLevel":{}},
-  {"id":"extraAbilityUse","name":"Twin Phylactery","description":"Abilities can hold one extra use.","theme":"relic","maxLevel":1,"effectsPerLevel":{}},
-  {"id":"phaseStride","name":"Spectral Gait","description":"Walk through and break walls for 10 seconds.","theme":"gothic","maxLevel":3,"effectsPerLevel":{"moveSpeed":0.1}},
-
-  {"id":"damage","name":"Tesla Musket Coils","description":"Fallout-style overcharged rounds hit harder.","theme":"wasteland","maxLevel":10,"effectsPerLevel":{"damage":1}},
-  {"id":"fireRate","name":"Ghoul Trigger Finger","description":"Faster trigger cycles for all weapons.","theme":"wasteland","maxLevel":8,"effectsPerLevel":{"cooldownMs":-70}},
-  {"id":"moveSpeed","name":"Werewolf Tendons","description":"Monstrous movement speed surge.","theme":"gothic","maxLevel":8,"effectsPerLevel":{"moveSpeed":0.35}},
-  {"id":"pickupRadius","name":"Necromancer Magnet","description":"Soul shards fly in from farther away.","theme":"ritual","maxLevel":8,"effectsPerLevel":{"pickupRadius":0.6}},
-  {"id":"maxHp","name":"Franken Heart Stitch","description":"Bolster maximum vitality and recover.","theme":"alchemy","maxLevel":6,"effectsPerLevel":{"maxHp":5,"heal":2}}
+  {
+    "id": "whip",
+    "name": "Count's Chain",
+    "description": "A vampire-slayer lash cleaves a wider arc.",
+    "theme": "gothic",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "damage": 4,
+      "cooldownMs": -100
+    }
+  },
+  {
+    "id": "garlic",
+    "name": "Holy Garlic Sigil",
+    "description": "Consecrated vapors scorch foes nearby.",
+    "theme": "alchemy",
+    "maxLevel": 5,
+    "effectsPerLevel": {
+      "auraDamage": 1,
+      "auraRadius": 0.4
+    }
+  },
+  {
+    "id": "stakes",
+    "name": "Runed Stakes",
+    "description": "Silvered rounds pierce deeper and fly truer.",
+    "theme": "weapon",
+    "maxLevel": 6,
+    "effectsPerLevel": {
+      "projectileDamage": 1,
+      "projectileSpeed": 0.4,
+      "cooldownMs": -80,
+      "pierce": 1,
+      "ricochet": 1
+    }
+  },
+  {
+    "id": "bats",
+    "name": "Night Brood",
+    "description": "Summon ravenous bat familiars.",
+    "theme": "gothic",
+    "maxLevel": 4,
+    "effectsPerLevel": {
+      "batCount": 1,
+      "batDamage": 1,
+      "batRadius": 0.25
+    }
+  },
+  {
+    "id": "teleportStep",
+    "name": "Mist Step",
+    "description": "Active ability: blink in your movement direction.",
+    "theme": "ritual",
+    "maxLevel": 5,
+    "effectsPerLevel": {}
+  },
+  {
+    "id": "sentinelClone",
+    "name": "Pale Doppel",
+    "description": "Active ability: deploy a static gun-wielding clone.",
+    "theme": "relic",
+    "maxLevel": 5,
+    "effectsPerLevel": {}
+  },
+  {
+    "id": "graveWall",
+    "name": "Bone Rampart",
+    "description": "Active ability: leave a wall trail for 5 seconds.",
+    "theme": "ritual",
+    "maxLevel": 5,
+    "effectsPerLevel": {}
+  },
+  {
+    "id": "extraAbilityUse",
+    "name": "Twin Phylactery",
+    "description": "Abilities gain +1 max charge for all unlocked slots.",
+    "theme": "relic",
+    "maxLevel": 5,
+    "effectsPerLevel": {}
+  },
+  {
+    "id": "phaseStride",
+    "name": "Spectral Gait",
+    "description": "Walk through and break walls for 10 seconds.",
+    "theme": "gothic",
+    "maxLevel": 3,
+    "effectsPerLevel": {
+      "moveSpeed": 0.1
+    }
+  },
+  {
+    "id": "damage",
+    "name": "Tesla Musket Coils",
+    "description": "Fallout-style overcharged rounds hit harder.",
+    "theme": "wasteland",
+    "maxLevel": 10,
+    "effectsPerLevel": {
+      "damage": 1
+    }
+  },
+  {
+    "id": "fireRate",
+    "name": "Ghoul Trigger Finger",
+    "description": "Faster trigger cycles for all weapons.",
+    "theme": "wasteland",
+    "maxLevel": 8,
+    "effectsPerLevel": {
+      "cooldownMs": -70
+    }
+  },
+  {
+    "id": "moveSpeed",
+    "name": "Werewolf Tendons",
+    "description": "Monstrous movement speed surge.",
+    "theme": "gothic",
+    "maxLevel": 8,
+    "effectsPerLevel": {
+      "moveSpeed": 0.35
+    }
+  },
+  {
+    "id": "pickupRadius",
+    "name": "Necromancer Magnet",
+    "description": "Soul shards fly in from farther away.",
+    "theme": "ritual",
+    "maxLevel": 8,
+    "effectsPerLevel": {
+      "pickupRadius": 0.6
+    }
+  },
+  {
+    "id": "maxHp",
+    "name": "Franken Heart Stitch",
+    "description": "Bolster maximum vitality and recover.",
+    "theme": "alchemy",
+    "maxLevel": 6,
+    "effectsPerLevel": {
+      "maxHp": 5,
+      "heal": 2
+    }
+  }
 ]
