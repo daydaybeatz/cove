@@ -179,10 +179,10 @@
       <div>
         <div>HP</div>
         <div class="bar"><div id="hpFill" class="fill hp-fill" style="width:100%"></div></div>
-        <div>XP</div>
+        <div>Door</div>
         <div class="bar"><div id="xpFill" class="fill xp-fill" style="width:0%"></div></div>
       </div>
-      <div id="stats">Lv 1 · 00:00 · KOs 0</div>
+      <div id="stats">$0 · 00:00 · KOs 0</div>
     </div>
 
     <div class="screen-wrap">
@@ -198,7 +198,11 @@
     <div class="controls">
       <div id="moveStick" class="stick"><div class="knob"></div></div>
       <div class="buttons">
-        <button id="abilityBtn">RELIC BURST</button>
+        <div id="safehouseControls" style="display:none; gap:8px; align-items:center;">
+          <button id="levelPrev" type="button">⬆ Level</button>
+          <button id="levelNext" type="button">⬇ Level</button>
+          <button id="shopBtn" type="button">Crate Shop</button>
+        </div>
         <div class="opts">
           <label><input id="autoAim" type="checkbox" checked /> Auto-aim</label>
           <label><input id="autoFire" type="checkbox" checked /> Auto-fire</label>
@@ -218,27 +222,35 @@
   <script>
     const GRID_W = 34, GRID_H = 30;
     const TICK = 1000 / 30;
+    const BASE_PLAYER = {
+      hp: 30, maxHp: 30, moveSpeed: 5.4, damage: 1, pickupRadius: 1.8, cooldownMs: 520,
+      whipLevel: 0, garlicLevel: 0, stakesLevel: 1, batsLevel: 0
+    };
 
     const state = {
       timeSec: 0,
       kills: 0,
       paused: false,
       level: 1,
-      xp: 0,
-      xpToLevel: 10,
+      money: 0,
+      room: 'run',
+      highestUnlockedLevel: 1,
+      selectedLevelIndex: 0,
+      doorTouchSec: 0,
+      doorTarget: null,
       player: {
         x: 0, y: 0,
-        hp: 30, maxHp: 30,
-        moveSpeed: 5.4,
-        damage: 1,
-        pickupRadius: 1.8,
-        cooldownMs: 520,
+        hp: BASE_PLAYER.hp, maxHp: BASE_PLAYER.maxHp,
+        moveSpeed: BASE_PLAYER.moveSpeed,
+        damage: BASE_PLAYER.damage,
+        pickupRadius: BASE_PLAYER.pickupRadius,
+        cooldownMs: BASE_PLAYER.cooldownMs,
         lastShot: 0,
         aimX: 1, aimY: 0,
-        whipLevel: 0,
-        garlicLevel: 0,
-        stakesLevel: 1,
-        batsLevel: 0,
+        whipLevel: BASE_PLAYER.whipLevel,
+        garlicLevel: BASE_PLAYER.garlicLevel,
+        stakesLevel: BASE_PLAYER.stakesLevel,
+        batsLevel: BASE_PLAYER.batsLevel,
       },
       enemies: [], bullets: [], gems: [], pickups: [], fx: [], clones: [],
       activeWeapon: 'rifle',
@@ -353,13 +365,13 @@
       state.levelStartTime = 0;
       state.nextBossAt = state.levelDef.bossIntervalSec;
       resetPlayer();
-      rebuildLevelGeometry();
+      setupSafehouse();
       bindStick('moveStick', 'move');
       bindStick('aimStick', 'aim');
       initAbilitySlots();
       bindHotkeys();
       bindAbilityNavigator();
-      document.getElementById('abilityBtn').addEventListener('click', panicBomb);
+      bindSafehouseControls();
       setInterval(loop, TICK);
     }
 
@@ -399,6 +411,16 @@
     }
 
     function resetPlayer(){ state.player.x = GRID_W/2; state.player.y = GRID_H/2; }
+
+    function bindSafehouseControls(){
+      document.getElementById('levelPrev').addEventListener('click', ()=>{
+        state.selectedLevelIndex = clamp(state.selectedLevelIndex + 1, 0, state.highestUnlockedLevel - 1);
+      });
+      document.getElementById('levelNext').addEventListener('click', ()=>{
+        state.selectedLevelIndex = clamp(state.selectedLevelIndex - 1, 0, state.highestUnlockedLevel - 1);
+      });
+      document.getElementById('shopBtn').addEventListener('click', openCrateShop);
+    }
 
     function cellBlocked(x, y){
       if(x < 0 || y < 0 || x >= GRID_W || y >= GRID_H) return true;
@@ -528,6 +550,7 @@
 
     function rebuildLevelGeometry(){
       state.walls = generateWalls();
+      enforceBorderWalls();
       const spawn = randomOpenCell();
       state.player.x = spawn.x;
       state.player.y = spawn.y;
@@ -535,6 +558,41 @@
       state.nextFlowUpdate = 0;
       state.movement.vx = 0;
       state.movement.vy = 0;
+      state.walls[GRID_H - 2][Math.floor(GRID_W / 2)] = 0;
+    }
+
+    function enforceBorderWalls(){
+      for(let x=0;x<GRID_W;x++){
+        state.walls[0][x] = 9;
+        state.walls[GRID_H-1][x] = 9;
+      }
+      for(let y=0;y<GRID_H;y++){
+        state.walls[y][0] = 9;
+        state.walls[y][GRID_W-1] = 9;
+      }
+    }
+
+    function setupSafehouse(){
+      state.room = 'safehouse';
+      state.walls = emptyWallGrid();
+      enforceBorderWalls();
+      state.player.x = GRID_W / 2;
+      state.player.y = GRID_H - 4;
+      state.walls[1][Math.floor(GRID_W / 2)] = 0;
+      state.enemies = []; state.bullets = []; state.gems = []; state.pickups = [];
+      state.doorTouchSec = 0;
+    }
+
+    function startRun(){
+      state.room = 'run';
+      state.levelDef = state.configs.levels[state.selectedLevelIndex] || state.configs.levels[0];
+      state.levelStartTime = 0;
+      state.timeSec = 0;
+      state.nextBossAt = state.levelDef.bossIntervalSec;
+      state.kills = 0;
+      state.enemies = []; state.bullets = []; state.gems = []; state.pickups = [];
+      rebuildLevelGeometry();
+      state.doorTouchSec = 0;
     }
 
     function updateFlowField(){
@@ -760,14 +818,6 @@
       }
     }
 
-    function panicBomb(){
-      for(const e of state.enemies){
-        const d = dist(state.player,e);
-        if(d < 8){ e.hp -= 26; e.hitFlash = 0.2; }
-      }
-      state.player.hp = clamp(state.player.hp + 4, 0, state.player.maxHp);
-    }
-
     function downgradeEnemy(e){
       const map = { boss: 'juggernaut', juggernaut: 'wraith', wraith: 'brute', brute: 'batling' };
       const next = map[e.type];
@@ -840,7 +890,7 @@
     }
 
     function clampInsideBounds(v, radius, max){
-      return clamp(v, radius, max - radius - 0.001);
+      return clamp(v, 1 + radius, max - 1 - radius - 0.001);
     }
 
     function directionGlyph(x, y){
@@ -913,7 +963,7 @@
         if(e.hp <= 0){
           spawnParticles('blood', e.x, e.y, e.boss ? 24 : 12);
           state.kills++;
-          state.gems.push({x:e.x,y:e.y,v:e.xp});
+          state.gems.push({x:e.x,y:e.y,v:Math.max(1, Math.round(e.xp * 2))});
           if(e.boss || Math.random() < 0.1){
             const drop = randomWeaponDrop();
             state.pickups.push({ x: e.x, y: e.y, weaponId: drop.id, bornAt: state.timeSec, ttl: rand(3, 5), blinkAt: 1.6 });
@@ -959,8 +1009,7 @@
       for(let i=state.gems.length-1;i>=0;i--){
         const g = state.gems[i], d = dist(p,g);
         if(d < p.pickupRadius){
-          p.xpGain = (p.xpGain||0)+g.v;
-          state.xp += g.v;
+          state.money += g.v;
           state.gems.splice(i,1);
         } else if(d < p.pickupRadius + 2.5){
           const n = normalize(p.x-g.x,p.y-g.y);
@@ -979,34 +1028,36 @@
           state.pickups.splice(i, 1);
         }
       }
-      while(state.xp >= state.xpToLevel){
-        state.xp -= state.xpToLevel;
-        state.level++;
-        state.xpToLevel = Math.floor(state.xpToLevel * 1.25 + 4);
-        levelUp();
-      }
     }
 
-    function levelUp(){
+    function upgradeCost(up){
+      const level = state.upgradeLevels[up.id] || 0;
+      return 25 + level * 20;
+    }
+
+    function openCrateShop(){
+      if(state.room !== 'safehouse') return;
       state.paused = true;
       overlay.style.display = 'grid';
       const available = state.configs.upgrades.filter(canTakeUpgrade);
-      const picks = [...available].sort(()=>Math.random()-0.5).slice(0,3);
+      const picks = [...available].sort(()=>Math.random()-0.5).slice(0,4);
       choices.innerHTML = '';
       if(!picks.length){
-        overlay.style.display='none';
-        state.paused = false;
-        return;
+        choices.innerHTML = '<div>Everything is maxed out.</div>';
       }
       for(const up of picks){
+        const cost = upgradeCost(up);
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'choice';
         btn.style.borderLeftColor = upgradeColor(up);
         btn.style.color = upgradeColor(up);
-        btn.textContent = `${up.name}: ${upgradeSummary(up)}`;
+        btn.textContent = `${up.name} ($${cost}): ${upgradeSummary(up)}`;
+        btn.disabled = state.money < cost;
         const pick = (event) => {
           event.preventDefault();
+          if(state.money < cost) return;
+          state.money -= cost;
           applyUpgrade(up);
           overlay.style.display='none';
           state.paused=false;
@@ -1015,6 +1066,12 @@
         btn.addEventListener('click', pick);
         choices.appendChild(btn);
       }
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'choice';
+      closeBtn.textContent = 'Leave shop';
+      closeBtn.addEventListener('click', ()=>{ overlay.style.display='none'; state.paused=false; });
+      choices.appendChild(closeBtn);
     }
 
     function canTakeUpgrade(up){
@@ -1066,6 +1123,39 @@
       if(fx.pickupRadius) p.pickupRadius += fx.pickupRadius;
       if(fx.maxHp){ p.maxHp += fx.maxHp; p.hp += (fx.heal || 0); }
       p.hp = clamp(p.hp,0,p.maxHp);
+    }
+
+    function rebuildFromUpgrades(){
+      const hpRatio = state.player.maxHp > 0 ? state.player.hp / state.player.maxHp : 1;
+      Object.assign(state.player, {
+        maxHp: BASE_PLAYER.maxHp,
+        hp: BASE_PLAYER.hp,
+        moveSpeed: BASE_PLAYER.moveSpeed,
+        damage: BASE_PLAYER.damage,
+        pickupRadius: BASE_PLAYER.pickupRadius,
+        cooldownMs: BASE_PLAYER.cooldownMs,
+        whipLevel: BASE_PLAYER.whipLevel,
+        garlicLevel: BASE_PLAYER.garlicLevel,
+        stakesLevel: BASE_PLAYER.stakesLevel,
+        batsLevel: BASE_PLAYER.batsLevel
+      });
+      initAbilitySlots();
+      for(const [id, lv] of Object.entries(state.upgradeLevels)){
+        const up = state.configs.upgrades.find(u => u.id === id);
+        if(!up) continue;
+        for(let i=0;i<lv;i++) applyUpgrade(up);
+        state.upgradeLevels[id] = lv;
+      }
+      state.player.hp = clamp(state.player.maxHp * hpRatio, 1, state.player.maxHp);
+    }
+
+    function applyDeathPenalty(){
+      state.money = Math.floor(state.money * 0.5);
+      const pool = Object.entries(state.upgradeLevels).filter(([, lv]) => lv > 0);
+      if(!pool.length) return;
+      const [id] = pool[Math.floor(Math.random() * pool.length)];
+      state.upgradeLevels[id] = 0;
+      rebuildFromUpgrades();
     }
 
     function activateAbilitySlot(index){
@@ -1171,7 +1261,34 @@
       return parts.join(' · ');
     }
 
+
+    function doorInfo(){
+      if(state.room === 'run') return { x: Math.floor(GRID_W / 2), y: GRID_H - 2, target: 'safehouse' };
+      return { x: Math.floor(GRID_W / 2), y: 1, target: 'run' };
+    }
+
+    function updateDoorState(dt){
+      const door = doorInfo();
+      const touching = Math.hypot(state.player.x - (door.x + 0.5), state.player.y - (door.y + 0.5)) < 1.1;
+      if(touching && state.room === 'safehouse' && state.paused) return;
+      if(touching){
+        state.doorTouchSec = Math.min(3, state.doorTouchSec + dt);
+      } else {
+        state.doorTouchSec = Math.max(0, state.doorTouchSec - dt * 1.7);
+      }
+      if(state.doorTouchSec >= 3){
+        state.doorTouchSec = 0;
+        if(state.room === 'run'){
+          state.highestUnlockedLevel = Math.max(state.highestUnlockedLevel, state.selectedLevelIndex + 1);
+          setupSafehouse();
+        } else {
+          startRun();
+        }
+      }
+    }
+
     function spawnLogic(){
+      if(state.room !== 'run') return;
       const now = performance.now();
       const w = currentWave();
       if(now >= state.nextSpawnAt){
@@ -1184,18 +1301,6 @@
         state.nextBossAt += state.levelDef.bossIntervalSec;
       }
     }
-
-
-    function maybeAdvanceLevel(){
-      if(state.timeSec - state.levelStartTime < state.levelDef.durationSec) return;
-      state.levelIndex = (state.levelIndex + 1) % state.configs.levels.length;
-      state.levelDef = state.configs.levels[state.levelIndex];
-      state.levelStartTime = state.timeSec;
-      state.nextBossAt = state.timeSec + state.levelDef.bossIntervalSec;
-      state.shapeName = '';
-      rebuildLevelGeometry();
-    }
-
     function inputLogic(dt){
       const p = state.player;
       const move = state.joysticks.move;
@@ -1232,7 +1337,7 @@
         const nearest = state.enemies.reduce((best,e)=> dist(p,e) < dist(p,best)?e:best, state.enemies[0]);
         p.aimX += (nearest.x - p.x - p.aimX) * Math.min(1, dt * 10); p.aimY += (nearest.y - p.y - p.aimY) * Math.min(1, dt * 10);
       }
-      fire();
+      if(state.room === 'run') fire();
 
       for(const slot of state.abilitySlots){
         if(slot.level > 0 && slot.charges < slot.maxCharges && performance.now() >= slot.nextReadyAt){
@@ -1245,7 +1350,7 @@
     function render(){
       const glyphs = Array.from({length:GRID_H},()=>Array.from({length:GRID_W},()=> ({ char: ' ', color: '' })));
       for(let y=0;y<GRID_H;y++) for(let x=0;x<GRID_W;x++){ const hp = state.walls[y]?.[x] || 0; if(hp <= 0) continue; const char = hp > 6 ? '#': (hp > 3 ? '%' : ':'); const color = hp > 6 ? '#5f78b0' : (hp > 3 ? '#4e6290' : '#3c4d70'); setCell(glyphs, x, y, char, color); }
-      for(const g of state.gems){ setCell(glyphs, g.x|0, g.y|0, '+', 'var(--gem)'); }
+      for(const g of state.gems){ setCell(glyphs, g.x|0, g.y|0, '$', 'var(--gem)'); }
       for(const pickup of state.pickups){
         const weapon = getWeaponDrop(pickup.weaponId);
         const age = state.timeSec - (pickup.bornAt || 0);
@@ -1287,6 +1392,8 @@
       for(const t of state.traps) setCell(glyphs, Math.floor(t.x), Math.floor(t.y), '¤', '#98f59f');
       for(const l of state.activeLances) setCell(glyphs, Math.floor(l.x), Math.floor(l.y), '|', '#8be8ff');
       for(const f of state.fx) setCell(glyphs, Math.floor(f.x), Math.floor(f.y), f.char, f.color);
+      const door = doorInfo();
+      setCell(glyphs, door.x, door.y, 'D', state.doorTouchSec > 0 ? '#9fffad' : '#d9f0ff');
       const playerChar = state.effects.spinUntil > state.timeSec ? '✶' : '@';
       setCell(glyphs, Math.floor(p.x), Math.floor(p.y), playerChar, 'var(--player)');
 
@@ -1310,9 +1417,11 @@
 
 
       hpFill.style.width = `${(p.hp/p.maxHp)*100}%`;
-      xpFill.style.width = `${(state.xp/state.xpToLevel)*100}%`;
+      xpFill.style.width = `${(state.doorTouchSec/3)*100}%`;
       const shapeTag = state.levelDef?.wallPattern === 'shape' && state.shapeName ? ` · ${state.shapeName}` : '';
-      stats.textContent = `Lv ${state.level} · ${fmtTime(state.timeSec)} · ${state.levelDef?.name || ''}${shapeTag} · ${getWeaponDrop(state.activeWeapon).name} · KOs ${state.kills}`;
+      const roomTag = state.room === 'run' ? `${state.levelDef?.name || ''}${shapeTag}` : `Safehouse · Target ${state.configs.levels[state.selectedLevelIndex]?.name || ''}`;
+      stats.textContent = `$${state.money} · ${fmtTime(state.timeSec)} · ${roomTag} · ${getWeaponDrop(state.activeWeapon).name} · KOs ${state.kills}`;
+      document.getElementById('safehouseControls').style.display = state.room === 'safehouse' ? 'grid' : 'none';
     }
 
     let last = performance.now();
@@ -1322,25 +1431,26 @@
       last = now;
       if(state.paused) return;
       state.timeSec += dt;
-      maybeAdvanceLevel();
-
       inputLogic(dt);
-      spawnLogic();
-      whipTick(dt);
-      garlicTick(dt);
-      batsTick(dt);
-      cloneLogic(dt);
-      abilityEffectsLogic(dt);
-      bulletLogic(dt);
-      enemyLogic(dt);
-      fxLogic(dt);
-      pickupGems();
+      if(state.room === 'run'){
+        spawnLogic();
+        whipTick(dt);
+        garlicTick(dt);
+        batsTick(dt);
+        cloneLogic(dt);
+        abilityEffectsLogic(dt);
+        bulletLogic(dt);
+        enemyLogic(dt);
+        fxLogic(dt);
+        pickupGems();
+      }
+      updateDoorState(dt);
       render();
 
-      if(state.player.hp <= 0){
-        state.paused = true;
-        overlay.style.display = 'grid';
-        choices.innerHTML = `<div>Game Over. KOs: ${state.kills}. Refresh to retry.</div>`;
+      if(state.player.hp <= 0 && state.room === 'run'){
+        applyDeathPenalty();
+        state.player.hp = state.player.maxHp;
+        setupSafehouse();
       }
     }
 
