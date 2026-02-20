@@ -46,6 +46,19 @@
       align-items: center;
       font-size: 14px;
     }
+    .door-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .safehouse-controls {
+      display: none;
+      gap: 6px;
+      align-items: center;
+    }
+    .safehouse-controls button { padding: 6px 8px; }
     .bar {
       height: 10px;
       background: #1d2436;
@@ -59,6 +72,16 @@
     .screen-wrap {
       position: relative;
       min-height: 0;
+    }
+    .play-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 8px;
+      height: 100%;
+      min-height: 0;
+    }
+    .play-layout.shop-open {
+      grid-template-columns: minmax(0, 1fr) minmax(170px, 33%);
     }
     #screen {
       margin: 0;
@@ -75,6 +98,17 @@
       height: 100%;
       min-height: 0;
     }
+    .shop-panel {
+      display: none;
+      border: 1px solid #2a3552;
+      border-radius: 10px;
+      background: #0d1322;
+      padding: 8px;
+      overflow-y: auto;
+      min-height: 0;
+    }
+    .shop-panel h3 { margin: 0 0 8px; font-size: 14px; }
+    .shop-choices { display: grid; gap: 8px; }
     @media (max-width: 760px) {
       .app { gap: 6px; padding-inline: 8px; }
       .controls { grid-template-columns: 1fr 1fr; grid-template-areas: 'move aim' 'buttons buttons'; }
@@ -83,6 +117,8 @@
       .buttons { grid-area: buttons; }
       .stick { width: min(30vw, 120px); }
       #screen { font-size: clamp(12px, 3.1vw, 17px); }
+      .play-layout.shop-open { grid-template-columns: minmax(0, 1fr) minmax(140px, 40%); }
+      .safehouse-controls button { padding: 5px 7px; }
     }
     .controls {
       display: grid;
@@ -179,14 +215,27 @@
       <div>
         <div>HP</div>
         <div class="bar"><div id="hpFill" class="fill hp-fill" style="width:100%"></div></div>
-        <div>Door</div>
+        <div class="door-row">
+          <span>Door</span>
+          <div id="safehouseControls" class="safehouse-controls">
+            <button id="levelPrev" type="button">⬆ Level</button>
+            <button id="levelNext" type="button">⬇ Level</button>
+            <button id="shopBtn" type="button">Crate Shop ▶</button>
+          </div>
+        </div>
         <div class="bar"><div id="xpFill" class="fill xp-fill" style="width:0%"></div></div>
       </div>
       <div id="stats">$0 · 00:00 · KOs 0</div>
     </div>
 
     <div class="screen-wrap">
-      <pre id="screen"></pre>
+      <div id="playLayout" class="play-layout">
+        <pre id="screen"></pre>
+        <aside id="shopPanel" class="shop-panel">
+          <h3>Crate Shop</h3>
+          <div id="shopChoices" class="shop-choices"></div>
+        </aside>
+      </div>
     </div>
 
     <div id="hotbar" class="hotbar">
@@ -198,11 +247,6 @@
     <div class="controls">
       <div id="moveStick" class="stick"><div class="knob"></div></div>
       <div class="buttons">
-        <div id="safehouseControls" style="display:none; gap:8px; align-items:center;">
-          <button id="levelPrev" type="button">⬆ Level</button>
-          <button id="levelNext" type="button">⬇ Level</button>
-          <button id="shopBtn" type="button">Crate Shop</button>
-        </div>
         <div class="opts">
           <label><input id="autoAim" type="checkbox" checked /> Auto-aim</label>
           <label><input id="autoFire" type="checkbox" checked /> Auto-fire</label>
@@ -276,6 +320,7 @@
       upgradeLevels: {},
       hotbarBound: false,
       selectedAbilityIndex: 0,
+      shopOpen: false,
       effects: {
         sprintUntil: 0,
         spinUntil: 0,
@@ -295,6 +340,11 @@
     const stats = document.getElementById('stats');
     const overlay = document.getElementById('upgradeOverlay');
     const choices = document.getElementById('choices');
+    const safehouseControls = document.getElementById('safehouseControls');
+    const shopBtn = document.getElementById('shopBtn');
+    const playLayout = document.getElementById('playLayout');
+    const shopPanel = document.getElementById('shopPanel');
+    const shopChoices = document.getElementById('shopChoices');
 
     function fmtTime(s){ const m = Math.floor(s/60); const r = Math.floor(s%60); return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`; }
 
@@ -574,6 +624,7 @@
 
     function setupSafehouse(){
       state.room = 'safehouse';
+      state.shopOpen = false;
       state.walls = emptyWallGrid();
       enforceBorderWalls();
       state.player.x = GRID_W / 2;
@@ -585,6 +636,7 @@
 
     function startRun(){
       state.room = 'run';
+      state.shopOpen = false;
       state.levelDef = state.configs.levels[state.selectedLevelIndex] || state.configs.levels[0];
       state.levelStartTime = 0;
       state.timeSec = 0;
@@ -1037,13 +1089,13 @@
 
     function openCrateShop(){
       if(state.room !== 'safehouse') return;
-      state.paused = true;
-      overlay.style.display = 'grid';
+      state.shopOpen = !state.shopOpen;
+      if(!state.shopOpen) return;
       const available = state.configs.upgrades.filter(canTakeUpgrade);
       const picks = [...available].sort(()=>Math.random()-0.5).slice(0,4);
-      choices.innerHTML = '';
+      shopChoices.innerHTML = '';
       if(!picks.length){
-        choices.innerHTML = '<div>Everything is maxed out.</div>';
+        shopChoices.innerHTML = '<div>Everything is maxed out.</div>';
       }
       for(const up of picks){
         const cost = upgradeCost(up);
@@ -1059,19 +1111,18 @@
           if(state.money < cost) return;
           state.money -= cost;
           applyUpgrade(up);
-          overlay.style.display='none';
-          state.paused=false;
+          state.shopOpen = false;
         };
         btn.addEventListener('pointerdown', pick, { passive: false });
         btn.addEventListener('click', pick);
-        choices.appendChild(btn);
+        shopChoices.appendChild(btn);
       }
       const closeBtn = document.createElement('button');
       closeBtn.type = 'button';
       closeBtn.className = 'choice';
-      closeBtn.textContent = 'Leave shop';
-      closeBtn.addEventListener('click', ()=>{ overlay.style.display='none'; state.paused=false; });
-      choices.appendChild(closeBtn);
+      closeBtn.textContent = 'Close shop';
+      closeBtn.addEventListener('click', ()=>{ state.shopOpen = false; });
+      shopChoices.appendChild(closeBtn);
     }
 
     function canTakeUpgrade(up){
@@ -1421,7 +1472,11 @@
       const shapeTag = state.levelDef?.wallPattern === 'shape' && state.shapeName ? ` · ${state.shapeName}` : '';
       const roomTag = state.room === 'run' ? `${state.levelDef?.name || ''}${shapeTag}` : `Safehouse · Target ${state.configs.levels[state.selectedLevelIndex]?.name || ''}`;
       stats.textContent = `$${state.money} · ${fmtTime(state.timeSec)} · ${roomTag} · ${getWeaponDrop(state.activeWeapon).name} · KOs ${state.kills}`;
-      document.getElementById('safehouseControls').style.display = state.room === 'safehouse' ? 'grid' : 'none';
+      const inSafehouse = state.room === 'safehouse';
+      safehouseControls.style.display = inSafehouse ? 'flex' : 'none';
+      shopBtn.textContent = state.shopOpen ? 'Crate Shop ◀' : 'Crate Shop ▶';
+      playLayout.classList.toggle('shop-open', inSafehouse && state.shopOpen);
+      shopPanel.style.display = inSafehouse && state.shopOpen ? 'block' : 'none';
     }
 
     let last = performance.now();
