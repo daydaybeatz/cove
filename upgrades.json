@@ -139,5 +139,85 @@
       "maxHp": 5,
       "heal": 2
     }
+  },
+  {
+    "id": "sprintBurst",
+    "name": "Wolf Sprint",
+    "description": "Active ability: sprint for 6 seconds and phase through enemies.",
+    "theme": "gothic",
+    "maxLevel": 5,
+    "effectsPerLevel": {}
+  },
+  {
+    "id": "novaBlast",
+    "name": "Cataclysm Nova",
+    "description": "Active ability: blast everything around you with a shockwave.",
+    "theme": "ritual",
+    "maxLevel": 5,
+    "effectsPerLevel": {}
+  },
+  {
+    "id": "bladeWhirl",
+    "name": "Blade Cyclone",
+    "description": "Active ability: spinning melee storm around your body.",
+    "theme": "weapon",
+    "maxLevel": 5,
+    "effectsPerLevel": {}
+  },
+  {
+    "id": "dashRampage",
+    "name": "Dash Rampage",
+    "description": "Active ability: hyper-dash and shred enemies on contact.",
+    "theme": "wasteland",
+    "maxLevel": 5,
+    "effectsPerLevel": {}
+  },
+  {
+    "id": "glueTrap",
+    "name": "Glue Mire",
+    "description": "Active ability: drop sticky slowing traps that deal damage.",
+    "theme": "alchemy",
+    "maxLevel": 5,
+    "effectsPerLevel": {}
+  },
+  {
+    "id": "downgradeHex",
+    "name": "Regression Hex",
+    "description": "Active ability: downgrade enemy tiers by one rank.",
+    "theme": "ritual",
+    "maxLevel": 5,
+    "effectsPerLevel": {}
+  },
+  {
+    "id": "dualWield",
+    "name": "Twin Relics",
+    "description": "Active ability: use two weapons at once for 7 seconds.",
+    "theme": "weapon",
+    "maxLevel": 5,
+    "effectsPerLevel": {}
+  },
+  {
+    "id": "voidLance",
+    "name": "Void Lance",
+    "description": "Active ability: place piercing void lances in front of you.",
+    "theme": "relic",
+    "maxLevel": 5,
+    "effectsPerLevel": {}
+  },
+  {
+    "id": "meteorCall",
+    "name": "Meteor Psalm",
+    "description": "Active ability: call meteors onto enemy clusters.",
+    "theme": "wasteland",
+    "maxLevel": 5,
+    "effectsPerLevel": {}
+  },
+  {
+    "id": "timeBubble",
+    "name": "Chrono Bubble",
+    "description": "Active ability: slow enemies while you fire faster.",
+    "theme": "relic",
+    "maxLevel": 5,
+    "effectsPerLevel": {}
   }
 ]

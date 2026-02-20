@@ -32,11 +32,12 @@
       user-select: none;
     }
     .app {
-      min-height: 100svh;
+      height: 100svh;
       display: grid;
-      grid-template-rows: auto 1fr auto;
+      grid-template-rows: auto minmax(0, 1fr) auto auto;
       gap: 8px;
       padding: max(10px, env(safe-area-inset-top)) 10px max(14px, env(safe-area-inset-bottom));
+      overflow: hidden;
     }
     .hud {
       display: grid;
@@ -57,7 +58,7 @@
     .xp-fill { background: var(--xp); }
     .screen-wrap {
       position: relative;
-      min-height: 50svh;
+      min-height: 0;
     }
     #screen {
       margin: 0;
@@ -71,17 +72,8 @@
       white-space: pre;
       overflow: hidden;
       color: #dbe8ff;
-      min-height: 50svh;
-    }
-    #entityLayer {
-      position: absolute;
-      inset: 1px;
-      padding: 8px;
-      pointer-events: none;
-      overflow: hidden;
-      font-size: clamp(14px, 2.6vw, 20px);
-      line-height: 1;
-      letter-spacing: 0.02em;
+      height: 100%;
+      min-height: 0;
     }
     @media (max-width: 760px) {
       .app { gap: 6px; padding-inline: 8px; }
@@ -89,12 +81,8 @@
       #moveStick { grid-area: move; }
       #aimStick { grid-area: aim; justify-self: end; }
       .buttons { grid-area: buttons; }
-      .stick { width: min(38vw, 156px); }
-      #screen, #entityLayer { font-size: clamp(12px, 3.1vw, 17px); }
-    }
-    .entity {
-      position: absolute;
-      transform: translate(-50%, -50%);
+      .stick { width: min(30vw, 120px); }
+      #screen { font-size: clamp(12px, 3.1vw, 17px); }
     }
     .controls {
       display: grid;
@@ -104,10 +92,12 @@
     }
     .hotbar {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: auto minmax(0, 1fr) auto;
       gap: 6px;
       margin: 4px 0;
+      align-items: stretch;
     }
+    .nav-btn { min-width: 42px; }
     .hotkey-slot {
       border: 1px solid #2a3552;
       border-radius: 8px;
@@ -127,7 +117,7 @@
     .hotkey-slot.cooling { border-color: #7d83b7; color: #9fa8d8; }
     .hotkey-slot.empty { opacity: 0.7; }
     .stick {
-      width: min(42vw, 180px);
+      width: min(34vw, 148px);
       aspect-ratio: 1;
       border: 2px solid #2a3452;
       border-radius: 50%;
@@ -197,10 +187,13 @@
 
     <div class="screen-wrap">
       <pre id="screen"></pre>
-      <div id="entityLayer"></div>
     </div>
 
-    <div id="hotbar" class="hotbar"></div>
+    <div id="hotbar" class="hotbar">
+      <button id="abilityPrev" class="nav-btn" type="button">◀</button>
+      <button id="abilitySlot" class="hotkey-slot" type="button"></button>
+      <button id="abilityNext" class="nav-btn" type="button">▶</button>
+    </div>
 
     <div class="controls">
       <div id="moveStick" class="stick"><div class="knob"></div></div>
@@ -265,16 +258,26 @@
       shapeName: '',
       movement: { vx: 0, vy: 0 },
       abilitySlots: [],
-      abilityOrder: ['teleportStep', 'sentinelClone', 'graveWall'],
+      abilityOrder: ['teleportStep', 'sentinelClone', 'graveWall', 'sprintBurst', 'novaBlast', 'bladeWhirl', 'dashRampage', 'glueTrap', 'downgradeHex', 'dualWield', 'voidLance', 'meteorCall', 'timeBubble'],
       phaseWalkUntil: 0,
       entityScale: 1,
       upgradeLevels: {},
-      hotbarBound: false
+      hotbarBound: false,
+      selectedAbilityIndex: 0,
+      effects: {
+        sprintUntil: 0,
+        spinUntil: 0,
+        rampageUntil: 0,
+        dualWieldUntil: 0,
+        timeBubbleUntil: 0
+      },
+      traps: [],
+      activeLances: []
     };
 
     const screen = document.getElementById('screen');
-    const entityLayer = document.getElementById('entityLayer');
     const hotbar = document.getElementById('hotbar');
+    const abilitySlotBtn = document.getElementById('abilitySlot');
     const hpFill = document.getElementById('hpFill');
     const xpFill = document.getElementById('xpFill');
     const stats = document.getElementById('stats');
@@ -301,33 +304,19 @@
     ];
 
     const ABILITY_META = {
-      teleportStep: {
-        id: 'teleportStep',
-        key: '1',
-        name: 'Mist Step',
-        desc: 'Teleport in the direction you are moving.',
-        baseCooldown: 9500,
-        maxLevel: 5,
-        baseCharges: 1
-      },
-      sentinelClone: {
-        id: 'sentinelClone',
-        key: '2',
-        name: 'Pale Doppel',
-        desc: 'Place a static clone that shoots nearby enemies.',
-        baseCooldown: 13000,
-        maxLevel: 5,
-        baseCharges: 1
-      },
-      graveWall: {
-        id: 'graveWall',
-        key: '3',
-        name: 'Bone Rampart',
-        desc: 'Build a wall trail where you walk for 5s.',
-        baseCooldown: 15000,
-        maxLevel: 5,
-        baseCharges: 1
-      }
+      teleportStep: { id: 'teleportStep', key: '1', name: 'Mist Step', desc: 'Teleport in the direction you are moving.', baseCooldown: 9500, maxLevel: 5, baseCharges: 1 },
+      sentinelClone: { id: 'sentinelClone', key: '2', name: 'Pale Doppel', desc: 'Place a static clone that shoots nearby enemies.', baseCooldown: 13000, maxLevel: 5, baseCharges: 1 },
+      graveWall: { id: 'graveWall', key: '3', name: 'Bone Rampart', desc: 'Build a wall trail where you walk for 5s.', baseCooldown: 15000, maxLevel: 5, baseCharges: 1 },
+      sprintBurst: { id: 'sprintBurst', key: '4', name: 'Wolf Sprint', desc: 'Sprint for 6 seconds and phase through crowds.', baseCooldown: 20000, maxLevel: 5, baseCharges: 1 },
+      novaBlast: { id: 'novaBlast', key: '5', name: 'Cataclysm Nova', desc: 'Explode outward for huge area damage.', baseCooldown: 14000, maxLevel: 5, baseCharges: 1 },
+      bladeWhirl: { id: 'bladeWhirl', key: '6', name: 'Blade Cyclone', desc: 'Spin in place and shred everything nearby.', baseCooldown: 12000, maxLevel: 5, baseCharges: 1 },
+      dashRampage: { id: 'dashRampage', key: '7', name: 'Dash Rampage', desc: 'Chain violent dashes through enemy lines.', baseCooldown: 12500, maxLevel: 5, baseCharges: 1 },
+      glueTrap: { id: 'glueTrap', key: '8', name: 'Glue Mire', desc: 'Throw sticky traps that slow and hurt enemies.', baseCooldown: 9000, maxLevel: 5, baseCharges: 2 },
+      downgradeHex: { id: 'downgradeHex', key: '9', name: 'Regression Hex', desc: 'Downgrade nearby enemy classes by one tier.', baseCooldown: 17000, maxLevel: 5, baseCharges: 1 },
+      dualWield: { id: 'dualWield', key: '0', name: 'Twin Relics', desc: 'Fire two weapons at once for 7 seconds.', baseCooldown: 18000, maxLevel: 5, baseCharges: 1 },
+      voidLance: { id: 'voidLance', key: 'Q', name: 'Void Lance', desc: 'Summon piercing lances around your aim line.', baseCooldown: 11000, maxLevel: 5, baseCharges: 1 },
+      meteorCall: { id: 'meteorCall', key: 'E', name: 'Meteor Psalm', desc: 'Call meteors to strike random enemy packs.', baseCooldown: 14500, maxLevel: 5, baseCharges: 1 },
+      timeBubble: { id: 'timeBubble', key: 'R', name: 'Chrono Bubble', desc: 'Slow all enemies and hasten your fire rate.', baseCooldown: 16000, maxLevel: 5, baseCharges: 1 }
     };
 
     function escapeHtml(ch){
@@ -369,6 +358,7 @@
       bindStick('aimStick', 'aim');
       initAbilitySlots();
       bindHotkeys();
+      bindAbilityNavigator();
       document.getElementById('abilityBtn').addEventListener('click', panicBomb);
       setInterval(loop, TICK);
     }
@@ -386,11 +376,26 @@
 
     function bindHotkeys(){
       window.addEventListener('keydown', (e) => {
-        const index = Number(e.key) - 1;
-        if(index >= 0 && index < state.abilitySlots.length){
-          activateAbilitySlot(index);
-        }
+        if(e.key === 'ArrowLeft') selectAbility(-1);
+        if(e.key === 'ArrowRight') selectAbility(1);
+        if(e.key === ' ') activateSelectedAbility();
       });
+    }
+
+    function bindAbilityNavigator(){
+      document.getElementById('abilityPrev').addEventListener('click', () => selectAbility(-1));
+      document.getElementById('abilityNext').addEventListener('click', () => selectAbility(1));
+      abilitySlotBtn.addEventListener('click', activateSelectedAbility);
+    }
+
+    function selectAbility(dir){
+      if(!state.abilitySlots.length) return;
+      const len = state.abilitySlots.length;
+      state.selectedAbilityIndex = (state.selectedAbilityIndex + dir + len) % len;
+    }
+
+    function activateSelectedAbility(){
+      activateAbilitySlot(state.selectedAbilityIndex);
     }
 
     function resetPlayer(){ state.player.x = GRID_W/2; state.player.y = GRID_H/2; }
@@ -660,7 +665,8 @@
       const now = performance.now();
       const canFire = document.getElementById('autoFire').checked || state.joysticks.aim.active;
       const weapon = getWeaponDrop(state.activeWeapon);
-      const cooldown = Math.max(90, p.cooldownMs * weapon.cooldownMult);
+      const bubbleHaste = state.effects.timeBubbleUntil > state.timeSec ? 0.65 : 1;
+      const cooldown = Math.max(90, p.cooldownMs * weapon.cooldownMult * bubbleHaste);
       if(!canFire || now - p.lastShot < cooldown) return;
       p.lastShot = now;
       const aim = normalize(p.aimX, p.aimY);
@@ -669,18 +675,25 @@
       const spread = weaponSpread + upgradeSpread;
       const weaponCount = weapon.id === 'shotgun' ? (Math.random() < 0.5 ? 3 : 4) : weapon.projectiles;
       const count = Math.max(1, weaponCount + (p.stakesLevel >= 5 ? 1 : 0));
-      for(let i=0;i<count;i++){
-        const t = count === 1 ? 0 : (i / (count - 1)) * 2 - 1;
-        const a = Math.atan2(aim.y, aim.x) + t * spread;
-        state.bullets.push({
-          x:p.x, y:p.y,
-          vx:Math.cos(a)*(weapon.speed + p.stakesLevel * 0.4), vy:Math.sin(a)*(weapon.speed + p.stakesLevel * 0.4),
-          dmg:(2 + p.damage + p.stakesLevel * 0.45) * weapon.damageMult,
-          life:weapon.life,
-          pierce: weapon.pierce + Math.floor(p.stakesLevel/2),
-          ricochet: p.stakesLevel >= 4 ? 1 : 0,
-          char: weapon.id === 'laser' ? '=' : (p.stakesLevel >= 4 ? '*' : '.')
-        });
+      const fireWeapon = (w, aimOffset = 0) => {
+        for(let i=0;i<count;i++){
+          const t = count === 1 ? 0 : (i / (count - 1)) * 2 - 1;
+          const a = Math.atan2(aim.y, aim.x) + t * spread + aimOffset;
+          state.bullets.push({
+            x:p.x, y:p.y,
+            vx:Math.cos(a)*(w.speed + p.stakesLevel * 0.4), vy:Math.sin(a)*(w.speed + p.stakesLevel * 0.4),
+            dmg:(2 + p.damage + p.stakesLevel * 0.45) * w.damageMult,
+            life:w.life,
+            pierce: w.pierce + Math.floor(p.stakesLevel/2),
+            ricochet: p.stakesLevel >= 4 ? 1 : 0,
+            char: w.id === 'laser' ? '=' : (p.stakesLevel >= 4 ? '*' : '.')
+          });
+        }
+      };
+      fireWeapon(weapon);
+      if(state.effects.dualWieldUntil > state.timeSec){
+        const alt = WEAPON_DROPS.find(w => w.id !== weapon.id) || weapon;
+        fireWeapon(alt, 0.08);
       }
     }
 
@@ -755,6 +768,64 @@
       state.player.hp = clamp(state.player.hp + 4, 0, state.player.maxHp);
     }
 
+    function downgradeEnemy(e){
+      const map = { boss: 'juggernaut', juggernaut: 'wraith', wraith: 'brute', brute: 'batling' };
+      const next = map[e.type];
+      if(!next) return;
+      const t = getEnemyType(next);
+      if(!t) return;
+      const hpRatio = clamp(e.hp / Math.max(1, getEnemyType(e.type)?.hp || e.hp), 0.2, 1);
+      e.type = t.id;
+      e.char = t.char;
+      e.color = t.color;
+      e.hp = Math.max(1, t.hp * hpRatio);
+      e.speed = t.speed * 1.2;
+      e.touchDamage = t.touchDamage;
+      e.xp = t.xp;
+      e.size = t.size || 1;
+      e.boss = !!t.boss;
+      e.wallDamage = t.wallDamage || 0.6;
+      e.hitFlash = 0.3;
+    }
+
+    function abilityEffectsLogic(dt){
+      const p = state.player;
+      if(state.effects.spinUntil > state.timeSec){
+        const dps = 11 + (state.upgradeLevels.bladeWhirl || 0) * 4;
+        for(const e of state.enemies){
+          if(dist(p, e) < 1.8){ e.hp -= dps * dt; e.hitFlash = 0.08; }
+        }
+      }
+      if(state.effects.rampageUntil > state.timeSec){
+        const dps = 18 + (state.upgradeLevels.dashRampage || 0) * 5;
+        for(const e of state.enemies){
+          if(dist(p, e) < 1.2){ e.hp -= dps * dt; e.hitFlash = 0.1; }
+        }
+      }
+      for(let i=state.traps.length-1;i>=0;i--){
+        const t = state.traps[i];
+        t.ttl -= dt;
+        if(t.ttl <= 0){ state.traps.splice(i,1); continue; }
+        for(const e of state.enemies){
+          if(dist(t, e) < t.radius){
+            e.slowMul = Math.min(e.slowMul || 1, t.slow);
+            e.slowTimer = Math.max(e.slowTimer || 0, 0.2);
+            e.hp -= t.dps * dt;
+            e.hitFlash = 0.05;
+          }
+        }
+      }
+      for(let i=state.activeLances.length-1;i>=0;i--){
+        const l = state.activeLances[i];
+        l.ttl -= dt;
+        if(l.ttl <= 0){ state.activeLances.splice(i,1); continue; }
+        for(const e of state.enemies){
+          const d = Math.hypot(e.x - l.x, e.y - l.y);
+          if(d < 0.9){ e.hp -= l.dps * dt; e.hitFlash = 0.1; }
+        }
+      }
+    }
+
     function circleBlocked(x, y, radius = 0.3){
       const checks = [
         [x, y],
@@ -790,7 +861,10 @@
         const n = normalize(p.x - e.x, p.y - e.y);
         let moveX = n.x;
         let moveY = n.y;
-        let speed = e.speed * dt;
+        e.slowTimer = Math.max(0, (e.slowTimer || 0) - dt);
+        const localSlow = e.slowTimer > 0 ? (e.slowMul || 1) : 1;
+        const bubbleSlow = state.effects.timeBubbleUntil > state.timeSec ? 0.45 : 1;
+        let speed = e.speed * localSlow * bubbleSlow * dt;
 
         if(e.type === 'juggernaut'){
           e.dashCooldown = Math.max(0, e.dashCooldown - dt);
@@ -1019,18 +1093,66 @@
         return true;
       }
       if(slot.id === 'sentinelClone'){
-        state.clones.push({
-          x: p.x,
-          y: p.y,
-          ttl: 5 + slot.level * 1.5,
-          dps: 8 + slot.level * 4,
-          range: 4 + slot.level * 0.6
-        });
+        state.clones.push({ x: p.x, y: p.y, ttl: 5 + slot.level * 1.5, dps: 8 + slot.level * 4, range: 4 + slot.level * 0.6 });
         return true;
       }
       if(slot.id === 'graveWall'){
         p.wallTrailUntil = state.timeSec + 5;
         p.wallTrailPower = 6 + slot.level * 1.2;
+        return true;
+      }
+      if(slot.id === 'sprintBurst'){
+        state.effects.sprintUntil = Math.max(state.effects.sprintUntil, state.timeSec + 6 + slot.level * 0.5);
+        return true;
+      }
+      if(slot.id === 'novaBlast'){
+        const radius = 3.6 + slot.level * 0.65;
+        const dmg = 18 + slot.level * 11;
+        for(const e of state.enemies){ if(dist(p, e) < radius){ e.hp -= dmg; e.hitFlash = 0.2; } }
+        spawnParticles('blast', p.x, p.y, 26 + slot.level * 6);
+        return true;
+      }
+      if(slot.id === 'bladeWhirl'){
+        state.effects.spinUntil = Math.max(state.effects.spinUntil, state.timeSec + 4 + slot.level * 0.5);
+        return true;
+      }
+      if(slot.id === 'dashRampage'){
+        state.effects.rampageUntil = Math.max(state.effects.rampageUntil, state.timeSec + 2.3 + slot.level * 0.45);
+        return true;
+      }
+      if(slot.id === 'glueTrap'){
+        state.traps.push({ x: p.x + moveVec.x * 1.1, y: p.y + moveVec.y * 1.1, ttl: 4.4 + slot.level * 0.6, radius: 1.4 + slot.level * 0.2, slow: Math.max(0.2, 0.58 - slot.level * 0.05), dps: 4 + slot.level * 1.8 });
+        return true;
+      }
+      if(slot.id === 'downgradeHex'){
+        const radius = 4.2 + slot.level * 0.6;
+        for(const e of state.enemies){ if(dist(p, e) < radius) downgradeEnemy(e); }
+        return true;
+      }
+      if(slot.id === 'dualWield'){
+        state.effects.dualWieldUntil = Math.max(state.effects.dualWieldUntil, state.timeSec + 7 + slot.level * 0.6);
+        return true;
+      }
+      if(slot.id === 'voidLance'){
+        const aim = normalize(p.aimX, p.aimY);
+        for(let i=1;i<=3 + Math.floor(slot.level/2);i++){
+          state.activeLances.push({ x: p.x + aim.x * i * 1.4, y: p.y + aim.y * i * 1.4, ttl: 2 + slot.level * 0.3, dps: 12 + slot.level * 4 });
+        }
+        return true;
+      }
+      if(slot.id === 'meteorCall'){
+        const strikes = 3 + Math.floor(slot.level / 2);
+        for(let i=0;i<strikes;i++){
+          const e = state.enemies[Math.floor(Math.random() * state.enemies.length)];
+          if(!e) continue;
+          const mx = e.x + rand(-0.7, 0.7), my = e.y + rand(-0.7, 0.7);
+          for(const target of state.enemies){ if(Math.hypot(target.x - mx, target.y - my) < 1.4){ target.hp -= 20 + slot.level * 8; target.hitFlash = 0.3; } }
+          spawnParticles('blast', mx, my, 15);
+        }
+        return true;
+      }
+      if(slot.id === 'timeBubble'){
+        state.effects.timeBubbleUntil = Math.max(state.effects.timeBubbleUntil, state.timeSec + 4.5 + slot.level * 0.6);
         return true;
       }
       return false;
@@ -1080,15 +1202,17 @@
       const m = normalize(move.x, move.y);
       const accel = 27;
       const drag = 0.83;
-      state.movement.vx += (m.x * p.moveSpeed - state.movement.vx) * Math.min(1, dt * accel);
-      state.movement.vy += (m.y * p.moveSpeed - state.movement.vy) * Math.min(1, dt * accel);
+      const sprintBoost = state.effects.sprintUntil > state.timeSec ? 2.1 : 1;
+      const rampageBoost = state.effects.rampageUntil > state.timeSec ? 1.7 : 1;
+      state.movement.vx += (m.x * p.moveSpeed * sprintBoost * rampageBoost - state.movement.vx) * Math.min(1, dt * accel);
+      state.movement.vy += (m.y * p.moveSpeed * sprintBoost * rampageBoost - state.movement.vy) * Math.min(1, dt * accel);
       if(Math.hypot(move.x, move.y) < 0.1){
         state.movement.vx *= drag;
         state.movement.vy *= drag;
       }
       const nextX = clampInsideBounds(p.x + state.movement.vx * dt, 0.32, GRID_W);
       const nextY = clampInsideBounds(p.y + state.movement.vy * dt, 0.32, GRID_H);
-      const phasing = state.timeSec < state.phaseWalkUntil;
+      const phasing = state.timeSec < state.phaseWalkUntil || state.effects.sprintUntil > state.timeSec;
       if(phasing) damageWallAt(nextX, p.y, dt * 18);
       if(phasing || !circleBlocked(nextX, p.y, 0.32)) p.x = nextX;
       if(phasing) damageWallAt(p.x, nextY, dt * 18);
@@ -1151,46 +1275,39 @@
         }
       }
 
+      for(const b of state.bullets){ setCell(glyphs, Math.floor(b.x), Math.floor(b.y), b.char, 'var(--bullet)'); }
+      for(const e of state.enemies){
+        const ex = Math.floor(e.x), ey = Math.floor(e.y);
+        setCell(glyphs, ex, ey, e.char, e.hitFlash > 0 ? '#ffffff' : (e.color || 'var(--enemy)'));
+        if(e.type === 'juggernaut' && e.dashWindup > 0){
+          setCell(glyphs, Math.floor(e.x + e.dashDirX * 1.8), Math.floor(e.y + e.dashDirY * 1.8), directionGlyph(e.dashDirX, e.dashDirY), '#ffffff');
+        }
+      }
+      for(const c of state.clones) setCell(glyphs, Math.floor(c.x), Math.floor(c.y), '&', '#c1ccff');
+      for(const t of state.traps) setCell(glyphs, Math.floor(t.x), Math.floor(t.y), '¤', '#98f59f');
+      for(const l of state.activeLances) setCell(glyphs, Math.floor(l.x), Math.floor(l.y), '|', '#8be8ff');
+      for(const f of state.fx) setCell(glyphs, Math.floor(f.x), Math.floor(f.y), f.char, f.color);
+      const playerChar = state.effects.spinUntil > state.timeSec ? '✶' : '@';
+      setCell(glyphs, Math.floor(p.x), Math.floor(p.y), playerChar, 'var(--player)');
+
       const lines = glyphs.map(row => row.map(cell => cell.color
-        ? `<span class=\"glyph\" style=\"color:${cell.color}\">${escapeHtml(cell.char)}</span>`
+        ? `<span class="glyph" style="color:${cell.color}">${escapeHtml(cell.char)}</span>`
         : escapeHtml(cell.char)).join(''));
       screen.innerHTML = lines.join('\n');
 
-      const entities = [];
-      const pushEntity = (x, y, char, color, scale = 1, opacity = 1) => {
-        entities.push(`<span class="entity" style="left:${(x / GRID_W) * 100}%;top:${(y / GRID_H) * 100}%;color:${color};transform:translate(-50%, -50%) scale(${scale});opacity:${opacity}">${escapeHtml(char)}</span>`);
-      };
-      for(const b of state.bullets) pushEntity(b.x, b.y, b.char, 'var(--bullet)');
-      for(const e of state.enemies){
-        const shake = e.type === 'juggernaut' && e.dashWindup > 0 ? (Math.sin(state.timeSec * 65) * 0.15) : 0;
-        pushEntity(e.x + shake, e.y, e.char, e.hitFlash > 0 ? '#ffffff' : (e.color || 'var(--enemy)'), e.size || 1);
-        if(e.type === 'juggernaut' && e.dashWindup > 0){
-          const ax = e.x + e.dashDirX * 1.8;
-          const ay = e.y + e.dashDirY * 1.8;
-          pushEntity(ax, ay, directionGlyph(e.dashDirX, e.dashDirY), '#ffffff', 1.2, 0.95);
+      const selected = state.abilitySlots[state.selectedAbilityIndex] || state.abilitySlots[0];
+      if(selected){
+        if(selected.level <= 0){
+          abilitySlotBtn.className = 'hotkey-slot empty';
+          abilitySlotBtn.innerHTML = `${ABILITY_META[selected.id].name}<br>Locked<br>${ABILITY_META[selected.id].desc}`;
+        } else {
+          const ready = performance.now() >= selected.nextReadyAt;
+          const remains = ready ? 'Ready' : `${((selected.nextReadyAt - performance.now()) / 1000).toFixed(1)}s`;
+          abilitySlotBtn.className = `hotkey-slot ${ready ? 'ready' : 'cooling'}`;
+          abilitySlotBtn.innerHTML = `${ABILITY_META[selected.id].name}<br>Lv ${selected.level} · ${selected.charges}/${selected.maxCharges}<br>${remains}`;
         }
       }
-      for(const c of state.clones) pushEntity(c.x, c.y, '&', '#c1ccff', 1.15, 0.9);
-      for(const f of state.fx) pushEntity(f.x, f.y, f.char, f.color);
-      pushEntity(p.x, p.y, '@', 'var(--player)');
-      entityLayer.innerHTML = entities.join('');
 
-      hotbar.innerHTML = state.abilitySlots.map((slot, idx) => {
-        if(slot.level <= 0) return `<button type="button" class="hotkey-slot empty" data-slot="${idx}">${ABILITY_META[slot.id].key}<br>${ABILITY_META[slot.id].name}<br>Locked</button>`;
-        const ready = performance.now() >= slot.nextReadyAt;
-        const remains = ready ? 'Ready' : `${((slot.nextReadyAt - performance.now()) / 1000).toFixed(1)}s`;
-        return `<button type="button" class="hotkey-slot ${ready ? 'ready' : 'cooling'}" data-slot="${idx}">${ABILITY_META[slot.id].key} · ${ABILITY_META[slot.id].name}<br>Lv ${slot.level} · ${slot.charges}/${slot.maxCharges}<br>${remains}</button>`;
-      }).join('');
-
-      if(!state.hotbarBound){
-        hotbar.addEventListener('pointerdown', (event) => {
-          const btn = event.target.closest('[data-slot]');
-          if(!btn) return;
-          event.preventDefault();
-          activateAbilitySlot(Number(btn.getAttribute('data-slot')));
-        }, { passive: false });
-        state.hotbarBound = true;
-      }
 
       hpFill.style.width = `${(p.hp/p.maxHp)*100}%`;
       xpFill.style.width = `${(state.xp/state.xpToLevel)*100}%`;
@@ -1213,6 +1330,7 @@
       garlicTick(dt);
       batsTick(dt);
       cloneLogic(dt);
+      abilityEffectsLogic(dt);
       bulletLogic(dt);
       enemyLogic(dt);
       fxLogic(dt);
