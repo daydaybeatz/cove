@@ -37,7 +37,7 @@
       grid-template-rows: auto minmax(0, 1fr) auto auto;
       gap: 8px;
       padding: max(10px, env(safe-area-inset-top)) 10px max(14px, env(safe-area-inset-bottom));
-      overflow: hidden;
+      overflow: clip;
     }
     .hud {
       display: grid;
@@ -88,7 +88,7 @@
       background: #080b12;
       border: 1px solid #1e2a44;
       border-radius: 10px;
-      font-size: clamp(14px, 2.6vw, 20px);
+      font-size: min(clamp(14px, 2.6vw, 20px), calc((100% - 16px) / 30));
       line-height: 1;
       letter-spacing: 0.02em;
       padding: 8px;
@@ -111,18 +111,16 @@
     .shop-choices { display: grid; gap: 8px; }
     @media (max-width: 760px) {
       .app { gap: 6px; padding-inline: 8px; }
-      .controls { grid-template-columns: 1fr 1fr; grid-template-areas: 'move aim' 'buttons buttons'; }
-      #moveStick { grid-area: move; }
-      #aimStick { grid-area: aim; justify-self: end; }
-      .buttons { grid-area: buttons; }
+      .controls { grid-template-columns: 1fr 1fr; }
+      #aimStick { justify-self: end; }
       .stick { width: min(30vw, 120px); }
-      #screen { font-size: clamp(12px, 3.1vw, 17px); }
+      #screen { font-size: min(clamp(12px, 3.1vw, 17px), calc((100% - 16px) / 30)); }
       .play-layout.shop-open { grid-template-columns: minmax(0, 1fr) minmax(140px, 40%); }
       .safehouse-controls button { padding: 5px 7px; }
     }
     .controls {
       display: grid;
-      grid-template-columns: 1fr auto 1fr;
+      grid-template-columns: 1fr 1fr;
       align-items: end;
       gap: 10px;
     }
@@ -171,12 +169,6 @@
       top: 28%;
       pointer-events: none;
     }
-    .buttons {
-      display: grid;
-      gap: 8px;
-      align-self: center;
-      justify-items: center;
-    }
     button, label {
       font: inherit;
       color: var(--fg);
@@ -186,7 +178,6 @@
       padding: 8px 10px;
     }
     button:active { transform: scale(0.97); }
-    .opts { display: grid; gap: 6px; font-size: 12px; color: var(--muted); }
     .overlay {
       position: fixed;
       inset: 0;
@@ -246,12 +237,6 @@
 
     <div class="controls">
       <div id="moveStick" class="stick"><div class="knob"></div></div>
-      <div class="buttons">
-        <div class="opts">
-          <label><input id="autoAim" type="checkbox" checked /> Auto-aim</label>
-          <label><input id="autoFire" type="checkbox" checked /> Auto-fire</label>
-        </div>
-      </div>
       <div id="aimStick" class="stick"><div class="knob"></div></div>
     </div>
   </div>
@@ -364,6 +349,9 @@
       { id: 'laser', name: 'Laser', glyph: 'L', color: '#ff7aff', cooldownMult: 2.1, damageMult: 3.8, speed: 14.5, life: 1.1, pierce: 999, spread: 0, projectiles: 1, ricochet: false },
       { id: 'shotgun', name: 'Shotgun', glyph: 'S', color: '#ffb347', cooldownMult: 1.45, damageMult: 0.8, speed: 10.4, life: 0.55, pierce: 0, spread: 0.24, projectiles: 4, ricochet: false }
     ];
+
+    const AUTO_AIM_ENABLED = true;
+    const AUTO_FIRE_ENABLED = true;
 
     const ABILITY_META = {
       teleportStep: { id: 'teleportStep', key: '1', name: 'Mist Step', desc: 'Teleport in the direction you are moving.', baseCooldown: 9500, maxLevel: 5, baseCharges: 1 },
@@ -773,7 +761,7 @@
     function fire(){
       const p = state.player;
       const now = performance.now();
-      const canFire = document.getElementById('autoFire').checked || state.joysticks.aim.active;
+      const canFire = AUTO_FIRE_ENABLED || state.joysticks.aim.active;
       const weapon = getWeaponDrop(state.activeWeapon);
       const bubbleHaste = state.effects.timeBubbleUntil > state.timeSec ? 0.65 : 1;
       const cooldown = Math.max(90, p.cooldownMs * weapon.cooldownMult * bubbleHaste);
@@ -1384,7 +1372,7 @@
       const aim = state.joysticks.aim;
       if(aim.active && Math.hypot(aim.x, aim.y) > 0.2){
         p.aimX += (aim.x - p.aimX) * Math.min(1, dt * 20); p.aimY += (aim.y - p.aimY) * Math.min(1, dt * 20);
-      } else if(document.getElementById('autoAim').checked && state.enemies.length){
+      } else if(AUTO_AIM_ENABLED && state.enemies.length){
         const nearest = state.enemies.reduce((best,e)=> dist(p,e) < dist(p,best)?e:best, state.enemies[0]);
         p.aimX += (nearest.x - p.x - p.aimX) * Math.min(1, dt * 10); p.aimY += (nearest.y - p.y - p.aimY) * Math.min(1, dt * 10);
       }
