@@ -97,7 +97,8 @@
     "maxLevel": 10,
     "effectsPerLevel": {
       "damage": 1
-    }
+    },
+    "exclusiveGroup": "power"
   },
   {
     "id": "fireRate",
@@ -107,7 +108,8 @@
     "maxLevel": 8,
     "effectsPerLevel": {
       "cooldownMs": -70
-    }
+    },
+    "exclusiveGroup": "rate"
   },
   {
     "id": "moveSpeed",
@@ -117,7 +119,8 @@
     "maxLevel": 8,
     "effectsPerLevel": {
       "moveSpeed": 0.35
-    }
+    },
+    "exclusiveGroup": "mobility"
   },
   {
     "id": "pickupRadius",
@@ -127,7 +130,8 @@
     "maxLevel": 8,
     "effectsPerLevel": {
       "pickupRadius": 0.6
-    }
+    },
+    "exclusiveGroup": "pickup"
   },
   {
     "id": "maxHp",
@@ -138,7 +142,8 @@
     "effectsPerLevel": {
       "maxHp": 5,
       "heal": 2
-    }
+    },
+    "exclusiveGroup": "vitality"
   },
   {
     "id": "sprintBurst",
@@ -219,5 +224,232 @@
     "theme": "relic",
     "maxLevel": 5,
     "effectsPerLevel": {}
+  },
+  {
+    "id": "stoneSkin",
+    "name": "Stone Skin",
+    "description": "Gain a one-time blue barrier shell before HP takes damage.",
+    "theme": "alchemy",
+    "maxLevel": 3,
+    "exclusiveGroup": "defense-core",
+    "effectsPerLevel": {
+      "maxShield": 10
+    }
+  },
+  {
+    "id": "bloodTax",
+    "name": "Blood Tax Rebate",
+    "description": "Deal damage to siphon health back.",
+    "theme": "ritual",
+    "maxLevel": 5,
+    "exclusiveGroup": "sustain",
+    "effectsPerLevel": {
+      "lifeSteal": 0.01
+    }
+  },
+  {
+    "id": "headhunter",
+    "name": "Headhunter Lens",
+    "description": "Critical hits from precision fire.",
+    "theme": "weapon",
+    "maxLevel": 5,
+    "exclusiveGroup": "crit",
+    "effectsPerLevel": {
+      "critChance": 0.05,
+      "critMult": 0.1
+    }
+  },
+  {
+    "id": "titanPlating",
+    "name": "Titan Plating",
+    "description": "Flat damage reduction from incoming hits.",
+    "theme": "wasteland",
+    "maxLevel": 4,
+    "exclusiveGroup": "defense-core",
+    "effectsPerLevel": {
+      "armor": 0.04
+    }
+  },
+  {
+    "id": "ghostStride",
+    "name": "Ghost Stride",
+    "description": "Faster movement between kill chains.",
+    "theme": "gothic",
+    "maxLevel": 6,
+    "exclusiveGroup": "mobility",
+    "effectsPerLevel": {
+      "moveSpeed": 0.18
+    }
+  },
+  {
+    "id": "vaultingBoots",
+    "name": "Vaulting Boots",
+    "description": "Short bursts of evasive speed.",
+    "theme": "relic",
+    "maxLevel": 5,
+    "exclusiveGroup": "mobility",
+    "effectsPerLevel": {
+      "moveSpeed": 0.22
+    }
+  },
+  {
+    "id": "bloodlineVigor",
+    "name": "Bloodline Vigor",
+    "description": "Rogue Legacy style hereditary toughness.",
+    "theme": "gothic",
+    "maxLevel": 6,
+    "exclusiveGroup": "vitality",
+    "effectsPerLevel": {
+      "maxHp": 4,
+      "heal": 1
+    }
+  },
+  {
+    "id": "hardReset",
+    "name": "Hard Reset Reactor",
+    "description": "Faster weapon cycling and trigger discipline.",
+    "theme": "wasteland",
+    "maxLevel": 6,
+    "exclusiveGroup": "rate",
+    "effectsPerLevel": {
+      "cooldownMs": -55
+    }
+  },
+  {
+    "id": "quickHands",
+    "name": "Quick Hands",
+    "description": "Borderlands reload-tech converted to fire cadence.",
+    "theme": "weapon",
+    "maxLevel": 6,
+    "exclusiveGroup": "rate",
+    "effectsPerLevel": {
+      "cooldownMs": -45
+    }
+  },
+  {
+    "id": "boomerCore",
+    "name": "Boomer Core",
+    "description": "Bigger payload in every shot.",
+    "theme": "wasteland",
+    "maxLevel": 6,
+    "exclusiveGroup": "power",
+    "effectsPerLevel": {
+      "damage": 1.3
+    }
+  },
+  {
+    "id": "aristocratRounds",
+    "name": "Aristocrat Rounds",
+    "description": "Expensive bullets, brutal impact.",
+    "theme": "weapon",
+    "maxLevel": 5,
+    "exclusiveGroup": "power",
+    "effectsPerLevel": {
+      "damage": 1.8
+    }
+  },
+  {
+    "id": "magnetArray",
+    "name": "Magnet Array",
+    "description": "Vacuum nearby loot from farther away.",
+    "theme": "relic",
+    "maxLevel": 6,
+    "exclusiveGroup": "pickup",
+    "effectsPerLevel": {
+      "pickupRadius": 0.5
+    }
+  },
+  {
+    "id": "echoLure",
+    "name": "Echo Lure",
+    "description": "Soul fragments spiral into you.",
+    "theme": "ritual",
+    "maxLevel": 6,
+    "exclusiveGroup": "pickup",
+    "effectsPerLevel": {
+      "pickupRadius": 0.45
+    }
+  },
+  {
+    "id": "berserkCircuit",
+    "name": "Berserk Circuit",
+    "description": "Nuclear Throne style aggression boost.",
+    "theme": "wasteland",
+    "maxLevel": 5,
+    "exclusiveGroup": "hybrid",
+    "effectsPerLevel": {
+      "damage": 0.8,
+      "moveSpeed": 0.12
+    }
+  },
+  {
+    "id": "duelistThread",
+    "name": "Duelist Thread",
+    "description": "Skirmisher wiring for pace and precision.",
+    "theme": "relic",
+    "maxLevel": 5,
+    "exclusiveGroup": "hybrid",
+    "effectsPerLevel": {
+      "cooldownMs": -30,
+      "moveSpeed": 0.1
+    }
+  },
+  {
+    "id": "grit",
+    "name": "Grit",
+    "description": "Reduce panic by buffering incoming damage.",
+    "theme": "alchemy",
+    "maxLevel": 5,
+    "exclusiveGroup": "shield",
+    "effectsPerLevel": {
+      "maxShield": 5
+    }
+  },
+  {
+    "id": "hardenedHalo",
+    "name": "Hardened Halo",
+    "description": "A halo barrier around your body.",
+    "theme": "relic",
+    "maxLevel": 4,
+    "exclusiveGroup": "shield",
+    "effectsPerLevel": {
+      "maxShield": 7
+    }
+  },
+  {
+    "id": "graveCommerce",
+    "name": "Grave Commerce",
+    "description": "Killed foes are worth more cash.",
+    "theme": "ritual",
+    "maxLevel": 5,
+    "exclusiveGroup": "economy",
+    "effectsPerLevel": {
+      "pickupRadius": 0.2,
+      "damage": 0.3
+    }
+  },
+  {
+    "id": "voidAnatomy",
+    "name": "Void Anatomy",
+    "description": "Study weak points for amplified crit lethality.",
+    "theme": "relic",
+    "maxLevel": 4,
+    "exclusiveGroup": "crit",
+    "effectsPerLevel": {
+      "critChance": 0.03,
+      "critMult": 0.2
+    }
+  },
+  {
+    "id": "overclockHeart",
+    "name": "Overclock Heart",
+    "description": "Push your body for HP and weapon speed.",
+    "theme": "alchemy",
+    "maxLevel": 5,
+    "exclusiveGroup": "vitality",
+    "effectsPerLevel": {
+      "maxHp": 3,
+      "cooldownMs": -25
+    }
   }
 ]
