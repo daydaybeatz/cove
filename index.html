@@ -582,44 +582,8 @@
     }
 
     function generateWalls(){
-      const pattern = state.levelDef?.wallPattern || 'drunken';
-      const density = state.levelDef?.wallDensity || 0.2;
-      const walls = emptyWallGrid();
-      if(pattern === 'drunken'){
-        const target = Math.floor(GRID_W * GRID_H * density);
-        let x = Math.floor(GRID_W / 2), y = Math.floor(GRID_H / 2), carved = 0;
-        while(carved < target){
-          if(x > 1 && y > 1 && x < GRID_W - 2 && y < GRID_H - 2 && !walls[y][x]){ walls[y][x] = 7; carved++; }
-          const d = [[1,0],[-1,0],[0,1],[0,-1]][Math.floor(Math.random() * 4)];
-          x = clamp(x + d[0], 1, GRID_W - 2);
-          y = clamp(y + d[1], 1, GRID_H - 2);
-        }
-      } else if(pattern === 'cellular'){
-        for(let y=1;y<GRID_H-1;y++) for(let x=1;x<GRID_W-1;x++) walls[y][x] = Math.random() < density ? 7 : 0;
-        for(let pass=0; pass<3; pass++){
-          const next = walls.map(row => row.slice());
-          for(let y=1;y<GRID_H-1;y++) for(let x=1;x<GRID_W-1;x++){
-            let n = 0;
-            for(let oy=-1;oy<=1;oy++) for(let ox=-1;ox<=1;ox++) if(ox||oy) n += walls[y+oy][x+ox] ? 1 : 0;
-            next[y][x] = n >= 5 ? 7 : 0;
-          }
-          for(let y=1;y<GRID_H-1;y++) for(let x=1;x<GRID_W-1;x++) walls[y][x] = next[y][x];
-        }
-      } else if(pattern === 'maze'){
-        return buildMaze();
-      } else if(pattern === 'rings'){
-        const cx = Math.floor(GRID_W/2), cy = Math.floor(GRID_H/2);
-        for(let y=1;y<GRID_H-1;y++) for(let x=1;x<GRID_W-1;x++){
-          const dx = x - cx, dy = y - cy;
-          const d = Math.hypot(dx * 0.7, dy);
-          if((Math.abs(d - 6) < 0.7 || Math.abs(d - 11) < 0.7) && !(Math.abs(dx) < 2 || Math.abs(dy) < 2)) walls[y][x] = 8;
-        }
-      } else if(pattern === 'shape'){
-        const shapes = ['skull', 'sword', 'potion', 'shield', 'tree', 'mountain'];
-        state.shapeName = shapes[Math.floor(Math.random() * shapes.length)];
-        return carveShape(state.shapeName);
-      }
-      return walls;
+      state.shapeName = '';
+      return emptyWallGrid();
     }
 
     function rebuildLevelGeometry(){
@@ -1530,12 +1494,7 @@
       if(phasing) damageWallAt(p.x, nextY, dt * 18);
       if(phasing || !circleBlocked(p.x, nextY, 0.32)) p.y = nextY;
 
-      if((p.wallTrailUntil || 0) > state.timeSec){
-        const gx = Math.floor(p.x), gy = Math.floor(p.y);
-        if(gx > 1 && gy > 1 && gx < GRID_W - 1 && gy < GRID_H - 1){
-          state.walls[gy][gx] = Math.max(state.walls[gy][gx] || 0, p.wallTrailPower || 6);
-        }
-      }
+      // Keep movement arena free-form: no ability should paint tile-locked walls on the run map.
 
       const aim = state.joysticks.aim;
       if(aim.active && Math.hypot(aim.x, aim.y) > 0.2){
