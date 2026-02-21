@@ -259,7 +259,6 @@
 
   <script>
     const GRID_W = 34, GRID_H = 30;
-    const TICK = 1000 / 30;
     const BASE_PLAYER = {
       hp: 30, maxHp: 30, moveSpeed: 5.4, damage: 1, pickupRadius: 1.8, cooldownMs: 520,
       whipLevel: 0, garlicLevel: 0, stakesLevel: 1, batsLevel: 0
@@ -446,7 +445,7 @@
       bindHotkeys();
       bindAbilityNavigator();
       bindSafehouseControls();
-      setInterval(loop, TICK);
+      requestAnimationFrame(loop);
     }
 
     function initAbilitySlots(){
@@ -1606,6 +1605,7 @@
 
     let last = performance.now();
     function loop(){
+      requestAnimationFrame(loop);
       const now = performance.now();
       const dt = Math.min(0.05, (now-last)/1000);
       last = now;
