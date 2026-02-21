@@ -807,6 +807,35 @@
       return damageWallAt(wx, wy, damage);
     }
 
+    function moveWithWallCollision(entity, moveX, moveY, radius, opts = {}){
+      const nextX = clampInsideBounds(entity.x + moveX, radius, GRID_W);
+      const nextY = clampInsideBounds(entity.y + moveY, radius, GRID_H);
+      const canBreak = !!opts.canBreakWalls;
+      const breakMult = opts.breakMult || 1;
+      const dt = opts.dt || 0;
+
+      const hitTarget = () => {
+        if(!canBreak) return false;
+        const targetX = entity.x + Math.sign(moveX || 0.0001) * (radius + 0.38);
+        const targetY = entity.y + Math.sign(moveY || 0.0001) * (radius + 0.38);
+        const proxy = { x: entity.x, y: entity.y, wallDamage: (entity.wallDamage || 0.6) * breakMult };
+        return breakWallTowardEntity(proxy, targetX, targetY, dt);
+      };
+
+      if(!circleBlocked(nextX, nextY, radius)){
+        entity.x = nextX;
+        entity.y = nextY;
+        return;
+      }
+
+      let moved = false;
+      const axisX = !circleBlocked(nextX, entity.y, radius);
+      const axisY = !circleBlocked(entity.x, nextY, radius);
+      if(axisX){ entity.x = nextX; moved = true; }
+      if(axisY){ entity.y = nextY; moved = true; }
+      if(!moved) hitTarget();
+    }
+
     function spawnParticles(kind, x, y, amount){
       const configs = {
         blood: { chars: ['.'], colors: ['#ff3b3b', '#ff4a4a', '#ff5a5a'], speed: [2.2, 5.3], life: [0.22, 0.55] },
@@ -1059,7 +1088,7 @@
           if(e.dashing > 0){
             moveX = e.dashDirX;
             moveY = e.dashDirY;
-            speed = e.speed * 7.2 * dt;
+            speed = e.speed * 8.6 * dt;
           } else if(e.dashWindup > 0){
             e.dashWindup -= dt;
             moveX = 0;
@@ -1078,8 +1107,12 @@
         }
 
         const radius = 0.3 * (e.size || 1);
-        e.x = clampInsideBounds(e.x + moveX * speed, radius, GRID_W);
-        e.y = clampInsideBounds(e.y + moveY * speed, radius, GRID_H);
+        const dashBreaking = e.type === 'juggernaut' && e.dashing > 0;
+        moveWithWallCollision(e, moveX * speed, moveY * speed, radius, {
+          canBreakWalls: e.canBreakWalls,
+          dt,
+          breakMult: dashBreaking ? 3.4 : 1
+        });
 
         if(dist(e,p) < 0.65 + (e.size - 1) * 0.45){ applyPlayerDamage(e.touchDamage*dt); }
         e.hitFlash = Math.max(0, e.hitFlash - dt);
@@ -1090,7 +1123,7 @@
           spawnParticles('blood', e.x, e.y, e.boss ? 24 : 12);
           state.kills++;
           state.gems.push({x:e.x,y:e.y,v:Math.max(1, Math.round(e.xp * 2))});
-          if(e.boss || Math.random() < 0.1){
+          if(e.boss || Math.random() < 0.35){
             const drop = randomWeaponDrop();
             state.pickups.push({ x: e.x, y: e.y, weaponId: drop.id, bornAt: state.timeSec, ttl: rand(3, 5), blinkAt: 1.6 });
           }
@@ -1539,10 +1572,7 @@
         state.movement.vx *= drag;
         state.movement.vy *= drag;
       }
-      const nextX = clampInsideBounds(p.x + state.movement.vx * dt, 0.32, GRID_W);
-      const nextY = clampInsideBounds(p.y + state.movement.vy * dt, 0.32, GRID_H);
-      p.x = nextX;
-      p.y = nextY;
+      moveWithWallCollision(p, state.movement.vx * dt, state.movement.vy * dt, 0.32);
 
       // Keep movement arena free-form: no ability should paint tile-locked walls on the run map.
 
