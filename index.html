@@ -69,6 +69,13 @@
     .fill { height: 100%; }
     .hp-fill { background: var(--hp); }
     .xp-fill { background: var(--xp); }
+    .shield-fill { background: #53b7ff; }
+    .death-note {
+      margin-top: 4px;
+      min-height: 1.2em;
+      color: #9ecbff;
+      font-size: 12px;
+    }
     .screen-wrap {
       position: relative;
       min-height: 0;
@@ -205,7 +212,9 @@
     <div class="hud">
       <div>
         <div>HP</div>
+        <div class="bar"><div id="shieldFill" class="fill shield-fill" style="width:0%"></div></div>
         <div class="bar"><div id="hpFill" class="fill hp-fill" style="width:100%"></div></div>
+        <div id="deathNote" class="death-note"></div>
         <div class="door-row">
           <span>Door</span>
           <div id="safehouseControls" class="safehouse-controls">
@@ -270,6 +279,7 @@
       player: {
         x: 0, y: 0,
         hp: BASE_PLAYER.hp, maxHp: BASE_PLAYER.maxHp,
+        shield: 0, maxShield: 0,
         moveSpeed: BASE_PLAYER.moveSpeed,
         damage: BASE_PLAYER.damage,
         pickupRadius: BASE_PLAYER.pickupRadius,
@@ -283,6 +293,7 @@
       },
       enemies: [], bullets: [], gems: [], pickups: [], fx: [], clones: [],
       activeWeapon: 'rifle',
+      selectedStartWeapon: 'rifle',
       configs: { upgrades: [], enemyTypes: [], waves: [], levels: [] },
       levelDef: null,
       nextSpawnAt: 0,
@@ -306,6 +317,8 @@
       hotbarBound: false,
       selectedAbilityIndex: 0,
       shopOpen: false,
+      fixtures: { armorStand: false, gunRack: false, perkMachine: false },
+      deathNote: '',
       effects: {
         sprintUntil: 0,
         spinUntil: 0,
@@ -320,9 +333,11 @@
     const screen = document.getElementById('screen');
     const hotbar = document.getElementById('hotbar');
     const abilitySlotBtn = document.getElementById('abilitySlot');
+    const shieldFill = document.getElementById('shieldFill');
     const hpFill = document.getElementById('hpFill');
     const xpFill = document.getElementById('xpFill');
     const stats = document.getElementById('stats');
+    const deathNote = document.getElementById('deathNote');
     const overlay = document.getElementById('upgradeOverlay');
     const choices = document.getElementById('choices');
     const safehouseControls = document.getElementById('safehouseControls');
@@ -393,8 +408,28 @@
     function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
     function normalize(x,y){ const d=Math.hypot(x,y)||1; return {x:x/d, y:y/d}; }
 
+    const SAVE_KEY = 'ascii-survivors-save-v2';
+
+    function loadPersistentState(){
+      try{
+        const raw = localStorage.getItem(SAVE_KEY);
+        if(!raw) return;
+        const save = JSON.parse(raw);
+        state.fixtures.armorStand = !!save.fixtures?.armorStand;
+        state.fixtures.gunRack = !!save.fixtures?.gunRack;
+        state.fixtures.perkMachine = !!save.fixtures?.perkMachine;
+        if(save.selectedStartWeapon && WEAPON_DROPS.some(w=>w.id===save.selectedStartWeapon)) state.selectedStartWeapon = save.selectedStartWeapon;
+      }catch(_err){}
+    }
+
+    function savePersistentState(){
+      const payload = { fixtures: state.fixtures, selectedStartWeapon: state.selectedStartWeapon };
+      localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+    }
+
     async function loadJson(path){ const r = await fetch(path); if(!r.ok) throw new Error(`Missing ${path}`); return r.json(); }
     async function boot(){
+      loadPersistentState();
       state.configs.upgrades = await loadJson('./upgrades.json');
       state.configs.enemyTypes = await loadJson('./enemy-types.json');
       state.configs.waves = await loadJson('./waves.json');
@@ -407,6 +442,7 @@
       bindStick('moveStick', 'move');
       bindStick('aimStick', 'aim');
       initAbilitySlots();
+      rebuildFromUpgrades();
       bindHotkeys();
       bindAbilityNavigator();
       bindSafehouseControls();
@@ -592,11 +628,13 @@
       const spawn = randomOpenCell();
       state.player.x = spawn.x;
       state.player.y = spawn.y;
+      clearSpawnArea(spawn.x, spawn.y, 2.2);
       state.flowField = [];
       state.nextFlowUpdate = 0;
       state.movement.vx = 0;
       state.movement.vy = 0;
       state.walls[GRID_H - 2][Math.floor(GRID_W / 2)] = 0;
+      clearSpawnArea(GRID_W / 2, GRID_H - 2, 2);
     }
 
     function enforceBorderWalls(){
@@ -607,6 +645,15 @@
       for(let y=0;y<GRID_H;y++){
         state.walls[y][0] = 9;
         state.walls[y][GRID_W-1] = 9;
+      }
+    }
+
+    function clearSpawnArea(x, y, radius = 2){
+      for(let gy=Math.floor(y-radius); gy<=Math.ceil(y+radius); gy++){
+        for(let gx=Math.floor(x-radius); gx<=Math.ceil(x+radius); gx++){
+          if(gx <= 0 || gy <= 0 || gx >= GRID_W - 1 || gy >= GRID_H - 1) continue;
+          if(Math.hypot(gx + 0.5 - x, gy + 0.5 - y) <= radius + 0.4) state.walls[gy][gx] = 0;
+        }
       }
     }
 
@@ -631,6 +678,9 @@
       state.nextBossAt = state.levelDef.bossIntervalSec;
       state.kills = 0;
       state.enemies = []; state.bullets = []; state.gems = []; state.pickups = [];
+      state.activeWeapon = state.fixtures.gunRack ? state.selectedStartWeapon : 'rifle';
+      state.player.shield = state.player.maxShield;
+      state.deathNote = '';
       rebuildLevelGeometry();
       state.doorTouchSec = 0;
     }
@@ -777,10 +827,12 @@
         for(let i=0;i<count;i++){
           const t = count === 1 ? 0 : (i / (count - 1)) * 2 - 1;
           const a = Math.atan2(aim.y, aim.x) + t * spread + aimOffset;
+          const crit = Math.random() < (p.critChance || 0);
+          const dmgBase = (2 + p.damage + p.stakesLevel * 0.45) * w.damageMult;
           state.bullets.push({
             x:p.x, y:p.y,
             vx:Math.cos(a)*(w.speed + p.stakesLevel * 0.4), vy:Math.sin(a)*(w.speed + p.stakesLevel * 0.4),
-            dmg:(2 + p.damage + p.stakesLevel * 0.45) * w.damageMult,
+            dmg:crit ? dmgBase * (p.critMult || 1.6) : dmgBase,
             life:w.life,
             pierce: w.pierce + Math.floor(p.stakesLevel/2),
             ricochet: p.stakesLevel >= 4 ? 1 : 0,
@@ -945,6 +997,18 @@
       return '↗';
     }
 
+    function applyPlayerDamage(amount){
+      const p = state.player;
+      const reduced = Math.max(0, amount * (1 - (p.armor || 0)));
+      let dmg = reduced;
+      if((p.shield || 0) > 0){
+        const used = Math.min(p.shield, dmg);
+        p.shield -= used;
+        dmg -= used;
+      }
+      if(dmg > 0) p.hp -= dmg;
+    }
+
     function enemyLogic(dt){
       const p = state.player;
       for(const e of state.enemies){
@@ -995,7 +1059,7 @@
         else if(!circleBlocked(e.x + steer, e.y, radius)) e.x = clampInsideBounds(e.x + steer, radius, GRID_W);
         else if(e.canBreakWalls) e.wallHitTicks += breakWallTowardEntity(e, p.x, p.y, dt) ? 1 : 0;
 
-        if(dist(e,p) < 0.65 + (e.size - 1) * 0.45){ p.hp -= e.touchDamage*dt; }
+        if(dist(e,p) < 0.65 + (e.size - 1) * 0.45){ applyPlayerDamage(e.touchDamage*dt); }
         e.hitFlash = Math.max(0, e.hitFlash - dt);
       }
       for(let i=state.enemies.length-1;i>=0;i--){
@@ -1037,6 +1101,7 @@
         for(const e of state.enemies){
           if(Math.hypot(e.x-b.x,e.y-b.y) < 0.55){
             e.hp -= b.dmg; e.hitFlash=0.07;
+            if(state.player.lifeSteal){ state.player.hp = clamp(state.player.hp + b.dmg * state.player.lifeSteal, 0, state.player.maxHp); }
             if(b.pierce > 0){ b.pierce--; } else { used = true; break; }
           }
         }
@@ -1072,7 +1137,26 @@
 
     function upgradeCost(up){
       const level = state.upgradeLevels[up.id] || 0;
-      return 25 + level * 20;
+      return 15 + level * 18;
+    }
+
+    function upgradeBucket(up){
+      if(up.exclusiveGroup) return up.exclusiveGroup;
+      return up.id;
+    }
+
+    function pickShopUpgrades(available, count = 4){
+      const shuffled = [...available].sort(()=>Math.random()-0.5);
+      const picks = [];
+      const used = new Set();
+      for(const up of shuffled){
+        const bucket = upgradeBucket(up);
+        if(used.has(bucket)) continue;
+        used.add(bucket);
+        picks.push(up);
+        if(picks.length >= count) break;
+      }
+      return picks;
     }
 
     function openCrateShop(){
@@ -1080,10 +1164,72 @@
       state.shopOpen = !state.shopOpen;
       if(!state.shopOpen) return;
       const available = state.configs.upgrades.filter(canTakeUpgrade);
-      const picks = [...available].sort(()=>Math.random()-0.5).slice(0,4);
+      const picks = pickShopUpgrades(available, 4);
       shopChoices.innerHTML = '';
+
+      const fixtures = [
+        { id: 'armorStand', name: 'Armor Stand', desc: 'Permanent: +16 blue shield each run.' },
+        { id: 'gunRack', name: 'Gun Rack', desc: `Permanent: start with ${getWeaponDrop(state.selectedStartWeapon).name}.` },
+        { id: 'perkMachine', name: 'Perk Machine', desc: 'Permanent: spend $10 for a random upgrade roll.' }
+      ];
+      for(const fix of fixtures){
+        const purchased = state.fixtures[fix.id];
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'choice';
+        btn.style.borderLeftColor = purchased ? '#6cff8d' : '#8bd3ff';
+        btn.textContent = purchased ? `✔ ${fix.name}: ${fix.desc}` : `${fix.name} ($50): ${fix.desc}`;
+        btn.disabled = purchased || state.money < 50;
+        btn.addEventListener('click', ()=>{
+          if(purchased || state.money < 50) return;
+          state.money -= 50;
+          state.fixtures[fix.id] = true;
+          rebuildFromUpgrades();
+          savePersistentState();
+          state.shopOpen = false;
+        });
+        shopChoices.appendChild(btn);
+      }
+
+      if(state.fixtures.gunRack){
+        const gunWrap = document.createElement('div');
+        gunWrap.textContent = 'Gun Rack Loadout:';
+        shopChoices.appendChild(gunWrap);
+        for(const weapon of WEAPON_DROPS){
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'choice';
+          const selected = state.selectedStartWeapon === weapon.id;
+          btn.textContent = `${selected ? '▶' : '○'} ${weapon.name}`;
+          btn.addEventListener('click', ()=>{
+            state.selectedStartWeapon = weapon.id;
+            savePersistentState();
+            state.shopOpen = false;
+            openCrateShop();
+          });
+          shopChoices.appendChild(btn);
+        }
+      }
+
+      if(state.fixtures.perkMachine){
+        const perkBtn = document.createElement('button');
+        perkBtn.type = 'button';
+        perkBtn.className = 'choice';
+        perkBtn.style.borderLeftColor = '#ffd166';
+        perkBtn.textContent = 'Perk Machine ($10): Roll a random upgrade';
+        perkBtn.disabled = state.money < 10 || !available.length;
+        perkBtn.addEventListener('click', ()=>{
+          if(state.money < 10 || !available.length) return;
+          state.money -= 10;
+          const roll = available[Math.floor(Math.random() * available.length)];
+          applyUpgrade(roll);
+          state.shopOpen = false;
+        });
+        shopChoices.appendChild(perkBtn);
+      }
+
       if(!picks.length){
-        shopChoices.innerHTML = '<div>Everything is maxed out.</div>';
+        shopChoices.innerHTML += '<div>Everything is maxed out.</div>';
       }
       for(const up of picks){
         const cost = upgradeCost(up);
@@ -1161,7 +1307,13 @@
       if(fx.moveSpeed) p.moveSpeed += fx.moveSpeed;
       if(fx.pickupRadius) p.pickupRadius += fx.pickupRadius;
       if(fx.maxHp){ p.maxHp += fx.maxHp; p.hp += (fx.heal || 0); }
+      if(fx.maxShield){ p.maxShield += fx.maxShield; p.shield += fx.maxShield; }
+      if(fx.lifeSteal) p.lifeSteal = (p.lifeSteal || 0) + fx.lifeSteal;
+      if(fx.critChance) p.critChance = (p.critChance || 0) + fx.critChance;
+      if(fx.critMult) p.critMult = (p.critMult || 1.5) + fx.critMult;
+      if(fx.armor) p.armor = (p.armor || 0) + fx.armor;
       p.hp = clamp(p.hp,0,p.maxHp);
+      p.shield = clamp(p.shield || 0,0,p.maxShield || 0);
     }
 
     function rebuildFromUpgrades(){
@@ -1169,6 +1321,12 @@
       Object.assign(state.player, {
         maxHp: BASE_PLAYER.maxHp,
         hp: BASE_PLAYER.hp,
+        shield: 0,
+        maxShield: state.fixtures.armorStand ? 16 : 0,
+        lifeSteal: 0,
+        critChance: 0,
+        critMult: 1.6,
+        armor: 0,
         moveSpeed: BASE_PLAYER.moveSpeed,
         damage: BASE_PLAYER.damage,
         pickupRadius: BASE_PLAYER.pickupRadius,
@@ -1186,15 +1344,25 @@
         state.upgradeLevels[id] = lv;
       }
       state.player.hp = clamp(state.player.maxHp * hpRatio, 1, state.player.maxHp);
+      state.player.shield = state.player.maxShield;
     }
 
     function applyDeathPenalty(){
+      const beforeMoney = state.money;
       state.money = Math.floor(state.money * 0.5);
+      const lostMoney = beforeMoney - state.money;
       const pool = Object.entries(state.upgradeLevels).filter(([, lv]) => lv > 0);
-      if(!pool.length) return;
-      const [id] = pool[Math.floor(Math.random() * pool.length)];
-      state.upgradeLevels[id] = 0;
-      rebuildFromUpgrades();
+      let lostUpgrade = '';
+      if(pool.length){
+        const [id] = pool[Math.floor(Math.random() * pool.length)];
+        const up = state.configs.upgrades.find(u => u.id === id);
+        lostUpgrade = up?.name || id;
+        state.upgradeLevels[id] = 0;
+        rebuildFromUpgrades();
+      }
+      state.deathNote = lostUpgrade
+        ? `You died. Lost $${lostMoney} and ${lostUpgrade}.`
+        : `You died. Lost $${lostMoney}.`;
     }
 
     function activateAbilitySlot(index){
@@ -1388,7 +1556,15 @@
 
     function render(){
       const glyphs = Array.from({length:GRID_H},()=>Array.from({length:GRID_W},()=> ({ char: ' ', color: '' })));
-      for(let y=0;y<GRID_H;y++) for(let x=0;x<GRID_W;x++){ const hp = state.walls[y]?.[x] || 0; if(hp <= 0) continue; const char = hp > 6 ? '#': (hp > 3 ? '%' : ':'); const color = hp > 6 ? '#5f78b0' : (hp > 3 ? '#4e6290' : '#3c4d70'); setCell(glyphs, x, y, char, color); }
+      const wallChars = ['░','▒','▓','≋','⋇','◈','⟡'];
+      for(let y=0;y<GRID_H;y++) for(let x=0;x<GRID_W;x++){
+        const hp = state.walls[y]?.[x] || 0;
+        if(hp <= 0) continue;
+        const hash = Math.abs((x * 73856093) ^ (y * 19349663) ^ ((hp * 13)|0));
+        const char = wallChars[hash % wallChars.length];
+        const color = hp > 6 ? '#5f78b0' : (hp > 3 ? '#4e6290' : '#3c4d70');
+        setCell(glyphs, x, y, char, color);
+      }
       for(const g of state.gems){ setCell(glyphs, g.x|0, g.y|0, '$', 'var(--gem)'); }
       for(const pickup of state.pickups){
         const weapon = getWeaponDrop(pickup.weaponId);
@@ -1455,6 +1631,7 @@
       }
 
 
+      shieldFill.style.width = `${(p.shield/Math.max(1,p.maxShield))*100}%`;
       hpFill.style.width = `${(p.hp/p.maxHp)*100}%`;
       xpFill.style.width = `${(state.doorTouchSec/3)*100}%`;
       const shapeTag = state.levelDef?.wallPattern === 'shape' && state.shapeName ? ` · ${state.shapeName}` : '';
@@ -1465,6 +1642,7 @@
       shopBtn.textContent = state.shopOpen ? 'Crate Shop ◀' : 'Crate Shop ▶';
       playLayout.classList.toggle('shop-open', inSafehouse && state.shopOpen);
       shopPanel.style.display = inSafehouse && state.shopOpen ? 'block' : 'none';
+      deathNote.textContent = state.deathNote;
     }
 
     let last = performance.now();
