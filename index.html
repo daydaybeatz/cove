@@ -95,15 +95,10 @@
       background: #080b12;
       border: 1px solid #1e2a44;
       border-radius: 10px;
-      font-size: min(clamp(14px, 2.6vw, 20px), calc((100vw - 24px) / 34));
-      line-height: 1;
-      letter-spacing: 0.02em;
-      padding: 8px;
-      white-space: pre;
-      overflow: hidden;
-      color: #dbe8ff;
+      width: 100%;
       height: 100%;
       min-height: 0;
+      display: block;
     }
     .shop-panel {
       display: none;
@@ -121,7 +116,6 @@
       .controls { grid-template-columns: 1fr 1fr; }
       #aimStick { justify-self: end; }
       .stick { width: min(30vw, 120px); }
-      #screen { font-size: min(clamp(12px, 3.1vw, 17px), calc((100vw - 20px) / 34)); }
       .play-layout.shop-open { grid-template-columns: minmax(0, 1fr) minmax(140px, 40%); }
       .safehouse-controls button { padding: 5px 7px; }
     }
@@ -230,7 +224,7 @@
 
     <div class="screen-wrap">
       <div id="playLayout" class="play-layout">
-        <pre id="screen"></pre>
+        <canvas id="screen"></canvas>
         <aside id="shopPanel" class="shop-panel">
           <h3>Crate Shop</h3>
           <div id="shopChoices" class="shop-choices"></div>
@@ -330,6 +324,7 @@
     };
 
     const screen = document.getElementById('screen');
+    const screenCtx = screen.getContext('2d');
     const hotbar = document.getElementById('hotbar');
     const abilitySlotBtn = document.getElementById('abilitySlot');
     const shieldFill = document.getElementById('shieldFill');
@@ -383,16 +378,33 @@
       timeBubble: { id: 'timeBubble', key: 'R', name: 'Chrono Bubble', desc: 'Slow all enemies and hasten your fire rate.', baseCooldown: 16000, maxLevel: 5, baseCharges: 1 }
     };
 
-    function escapeHtml(ch){
-      if(ch === '&') return '&amp;';
-      if(ch === '<') return '&lt;';
-      if(ch === '>') return '&gt;';
-      return ch;
+    function resizeScreenCanvas(){
+      const dpr = window.devicePixelRatio || 1;
+      const rect = screen.getBoundingClientRect();
+      const width = Math.max(1, Math.floor(rect.width * dpr));
+      const height = Math.max(1, Math.floor(rect.height * dpr));
+      if(screen.width !== width || screen.height !== height){
+        screen.width = width;
+        screen.height = height;
+      }
     }
 
-    function setCell(glyphs, x, y, char, color){
-      if(x<0||y<0||x>=GRID_W||y>=GRID_H) return;
-      glyphs[y][x] = { char, color };
+    function worldScale(){
+      return {
+        sx: screen.width / GRID_W,
+        sy: screen.height / GRID_H
+      };
+    }
+
+    function toScreen(x, y, sx, sy){
+      return { x: x * sx, y: y * sy };
+    }
+
+    function drawCircle(ctx, x, y, r, color){
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     function upgradeColor(up){
@@ -440,6 +452,8 @@
       setupSafehouse();
       bindStick('moveStick', 'move');
       bindStick('aimStick', 'aim');
+      resizeScreenCanvas();
+      window.addEventListener('resize', resizeScreenCanvas);
       initAbilitySlots();
       rebuildFromUpgrades();
       bindHotkeys();
@@ -1499,33 +1513,44 @@
     }
 
     function render(){
-      const glyphs = Array.from({length:GRID_H},()=>Array.from({length:GRID_W},()=> ({ char: ' ', color: '' })));
-      const wallChars = ['░','▒','▓','≋','⋇','◈','⟡'];
-      for(let y=0;y<GRID_H;y++) for(let x=0;x<GRID_W;x++){
-        const hp = state.walls[y]?.[x] || 0;
-        if(hp <= 0) continue;
-        const hash = Math.abs((x * 73856093) ^ (y * 19349663) ^ ((hp * 13)|0));
-        const char = wallChars[hash % wallChars.length];
-        const color = hp > 6 ? '#5f78b0' : (hp > 3 ? '#4e6290' : '#3c4d70');
-        setCell(glyphs, x, y, char, color);
+      resizeScreenCanvas();
+      const ctx = screenCtx;
+      const { sx, sy } = worldScale();
+      ctx.clearRect(0, 0, screen.width, screen.height);
+      ctx.fillStyle = '#080b12';
+      ctx.fillRect(0, 0, screen.width, screen.height);
+
+      for(let y=0;y<GRID_H;y++){
+        for(let x=0;x<GRID_W;x++){
+          const hp = state.walls[y]?.[x] || 0;
+          if(hp <= 0) continue;
+          ctx.fillStyle = hp > 6 ? '#5f78b0' : (hp > 3 ? '#4e6290' : '#3c4d70');
+          ctx.fillRect(x * sx, y * sy, sx, sy);
+        }
       }
-      for(const g of state.gems){ setCell(glyphs, g.x|0, g.y|0, '$', 'var(--gem)'); }
+
+      for(const g of state.gems){
+        const p = toScreen(g.x, g.y, sx, sy);
+        drawCircle(ctx, p.x, p.y, Math.max(2, Math.min(sx, sy) * 0.17), '#7dff95');
+      }
       for(const pickup of state.pickups){
-        const weapon = getWeaponDrop(pickup.weaponId);
         const age = state.timeSec - (pickup.bornAt || 0);
         const blinkAt = pickup.blinkAt || 1.6;
         const blink = age > blinkAt && Math.floor(state.timeSec * 12) % 2 === 0;
         if(blink) continue;
-        setCell(glyphs, pickup.x|0, pickup.y|0, weapon.glyph, 'var(--pickup)');
+        const p = toScreen(pickup.x, pickup.y, sx, sy);
+        drawCircle(ctx, p.x, p.y, Math.max(2, Math.min(sx, sy) * 0.22), '#6cff8d');
       }
-      const p = state.player;
 
+      const p = state.player;
       if(p.garlicLevel>0){
-        const r = 1.2 + p.garlicLevel*0.45;
-        for(let y=0;y<GRID_H;y++) for(let x=0;x<GRID_W;x++){
-          const d = Math.hypot(x-p.x,y-p.y);
-          if(d>r-0.4 && d<r+0.4 && glyphs[y][x].char===' ') glyphs[y][x]={char:'~',color:'var(--aura)'};
-        }
+        const r = (1.2 + p.garlicLevel * 0.45) * Math.min(sx, sy);
+        const cp = toScreen(p.x, p.y, sx, sy);
+        ctx.strokeStyle = 'rgba(212,255,122,0.55)';
+        ctx.lineWidth = Math.max(1.5, Math.min(sx, sy) * 0.08);
+        ctx.beginPath();
+        ctx.arc(cp.x, cp.y, r, 0, Math.PI * 2);
+        ctx.stroke();
       }
 
       if(p.batsLevel>0){
@@ -1533,33 +1558,55 @@
         for(let i=0;i<count;i++){
           const a = state.timeSec*2.2 + (Math.PI*2/count)*i;
           const r = 1.8 + p.batsLevel*0.25;
-          const bx = p.x + Math.cos(a) * r;
-          const by = p.y + Math.sin(a) * r;
-          setCell(glyphs, bx|0, by|0, 'o', 'var(--bat)');
+          const bp = toScreen(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, sx, sy);
+          drawCircle(ctx, bp.x, bp.y, Math.max(2, Math.min(sx, sy) * 0.16), '#bda6ff');
         }
       }
 
-      for(const b of state.bullets){ setCell(glyphs, Math.floor(b.x), Math.floor(b.y), b.char, 'var(--bullet)'); }
+      for(const b of state.bullets){
+        const bp = toScreen(b.x, b.y, sx, sy);
+        drawCircle(ctx, bp.x, bp.y, Math.max(2, Math.min(sx, sy) * 0.14), '#ffd166');
+      }
       for(const e of state.enemies){
-        const ex = Math.floor(e.x), ey = Math.floor(e.y);
-        setCell(glyphs, ex, ey, e.char, e.hitFlash > 0 ? '#ffffff' : (e.color || 'var(--enemy)'));
-        if(e.type === 'juggernaut' && e.dashWindup > 0){
-          setCell(glyphs, Math.floor(e.x + e.dashDirX * 1.8), Math.floor(e.y + e.dashDirY * 1.8), directionGlyph(e.dashDirX, e.dashDirY), '#ffffff');
-        }
+        const ep = toScreen(e.x, e.y, sx, sy);
+        const radius = (0.22 + (e.size - 1) * 0.12) * Math.min(sx, sy);
+        drawCircle(ctx, ep.x, ep.y, Math.max(3, radius), e.hitFlash > 0 ? '#ffffff' : (e.color || '#ff6f7d'));
       }
-      for(const c of state.clones) setCell(glyphs, Math.floor(c.x), Math.floor(c.y), '&', '#c1ccff');
-      for(const t of state.traps) setCell(glyphs, Math.floor(t.x), Math.floor(t.y), '¤', '#98f59f');
-      for(const l of state.activeLances) setCell(glyphs, Math.floor(l.x), Math.floor(l.y), '|', '#8be8ff');
-      for(const f of state.fx) setCell(glyphs, Math.floor(f.x), Math.floor(f.y), f.char, f.color);
-      const door = doorInfo();
-      setCell(glyphs, door.x, door.y, 'D', state.doorTouchSec > 0 ? '#9fffad' : '#d9f0ff');
-      const playerChar = state.effects.spinUntil > state.timeSec ? '✶' : '@';
-      setCell(glyphs, Math.floor(p.x), Math.floor(p.y), playerChar, 'var(--player)');
+      for(const c of state.clones){
+        const cp = toScreen(c.x, c.y, sx, sy);
+        drawCircle(ctx, cp.x, cp.y, Math.max(3, Math.min(sx, sy) * 0.2), '#c1ccff');
+      }
+      for(const t of state.traps){
+        const tp = toScreen(t.x, t.y, sx, sy);
+        drawCircle(ctx, tp.x, tp.y, Math.max(2, Math.min(sx, sy) * 0.16), '#98f59f');
+      }
+      for(const l of state.activeLances){
+        const lp = toScreen(l.x, l.y, sx, sy);
+        ctx.strokeStyle = '#8be8ff';
+        ctx.lineWidth = Math.max(1, Math.min(sx, sy) * 0.08);
+        ctx.beginPath();
+        ctx.moveTo(lp.x, lp.y - sy * 0.3);
+        ctx.lineTo(lp.x, lp.y + sy * 0.3);
+        ctx.stroke();
+      }
+      for(const f of state.fx){
+        const fp = toScreen(f.x, f.y, sx, sy);
+        drawCircle(ctx, fp.x, fp.y, Math.max(1, Math.min(sx, sy) * 0.08), f.color);
+      }
 
-      const lines = glyphs.map(row => row.map(cell => cell.color
-        ? `<span class="glyph" style="color:${cell.color}">${escapeHtml(cell.char)}</span>`
-        : escapeHtml(cell.char)).join(''));
-      screen.innerHTML = lines.join('\n');
+      const door = doorInfo();
+      const dp = toScreen(door.x + 0.5, door.y + 0.5, sx, sy);
+      drawCircle(ctx, dp.x, dp.y, Math.max(3, Math.min(sx, sy) * 0.24), state.doorTouchSec > 0 ? '#9fffad' : '#d9f0ff');
+
+      const pp = toScreen(p.x, p.y, sx, sy);
+      drawCircle(ctx, pp.x, pp.y, Math.max(3, Math.min(sx, sy) * 0.24), '#73f0ff');
+      if(state.effects.spinUntil > state.timeSec){
+        ctx.strokeStyle = '#d4ff7a';
+        ctx.lineWidth = Math.max(1.5, Math.min(sx, sy) * 0.07);
+        ctx.beginPath();
+        ctx.arc(pp.x, pp.y, Math.max(4, Math.min(sx, sy) * 0.36), 0, Math.PI * 2);
+        ctx.stroke();
+      }
 
       const selected = state.abilitySlots[state.selectedAbilityIndex] || state.abilitySlots[0];
       if(selected){
@@ -1574,7 +1621,6 @@
         }
       }
 
-
       shieldFill.style.width = `${(p.shield/Math.max(1,p.maxShield))*100}%`;
       hpFill.style.width = `${(p.hp/p.maxHp)*100}%`;
       xpFill.style.width = `${(state.doorTouchSec/3)*100}%`;
@@ -1588,6 +1634,7 @@
       shopPanel.style.display = inSafehouse && state.shopOpen ? 'block' : 'none';
       deathNote.textContent = state.deathNote;
     }
+
 
     let last = performance.now();
     function loop(){
@@ -1621,7 +1668,15 @@
     }
 
     boot().catch(err => {
-      screen.textContent = 'Failed to load JSON files. Serve files over HTTP (not file://).\n' + err.message;
+      resizeScreenCanvas();
+      screenCtx.fillStyle = '#080b12';
+      screenCtx.fillRect(0, 0, screen.width, screen.height);
+      screenCtx.fillStyle = '#ffd8d8';
+      screenCtx.font = `${Math.max(12, Math.floor(screen.height * 0.04))}px ui-monospace, monospace`;
+      screenCtx.fillText('Failed to load JSON files.', 16, 28);
+      screenCtx.fillText('Serve files over HTTP (not file://).', 16, 52);
+      screenCtx.fillText(err.message, 16, 76);
+      console.error(err);
     });
   </script>
 </body>
