@@ -1008,19 +1008,8 @@
         }
 
         const radius = 0.3 * (e.size || 1);
-        const nextX = clampInsideBounds(e.x + moveX * speed, radius, GRID_W);
-        const nextY = clampInsideBounds(e.y + moveY * speed, radius, GRID_H);
-        const steer = Math.sin((state.timeSec * 6) + e.x * 1.7 + e.y * 2.3) * speed * 0.45;
-        const blockX = circleBlocked(nextX, e.y, radius);
-        const blockY = circleBlocked(e.x, nextY, radius);
-
-        if(!blockX) e.x = nextX;
-        else if(!circleBlocked(e.x, e.y + steer, radius)) e.y = clampInsideBounds(e.y + steer, radius, GRID_H);
-        else if(e.canBreakWalls) e.wallHitTicks += breakWallTowardEntity(e, p.x, p.y, dt) ? 1 : 0;
-
-        if(!blockY) e.y = nextY;
-        else if(!circleBlocked(e.x + steer, e.y, radius)) e.x = clampInsideBounds(e.x + steer, radius, GRID_W);
-        else if(e.canBreakWalls) e.wallHitTicks += breakWallTowardEntity(e, p.x, p.y, dt) ? 1 : 0;
+        e.x = clampInsideBounds(e.x + moveX * speed, radius, GRID_W);
+        e.y = clampInsideBounds(e.y + moveY * speed, radius, GRID_H);
 
         if(dist(e,p) < 0.65 + (e.size - 1) * 0.45){ applyPlayerDamage(e.touchDamage*dt); }
         e.hitFlash = Math.max(0, e.hitFlash - dt);
@@ -1487,11 +1476,8 @@
       }
       const nextX = clampInsideBounds(p.x + state.movement.vx * dt, 0.32, GRID_W);
       const nextY = clampInsideBounds(p.y + state.movement.vy * dt, 0.32, GRID_H);
-      const phasing = state.timeSec < state.phaseWalkUntil || state.effects.sprintUntil > state.timeSec;
-      if(phasing) damageWallAt(nextX, p.y, dt * 18);
-      if(phasing || !circleBlocked(nextX, p.y, 0.32)) p.x = nextX;
-      if(phasing) damageWallAt(p.x, nextY, dt * 18);
-      if(phasing || !circleBlocked(p.x, nextY, 0.32)) p.y = nextY;
+      p.x = nextX;
+      p.y = nextY;
 
       // Keep movement arena free-form: no ability should paint tile-locked walls on the run map.
 
